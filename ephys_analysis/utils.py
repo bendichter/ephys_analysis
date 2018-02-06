@@ -65,14 +65,6 @@ def isin_time_windows(tt, tbounds, inclusive_left=True, inclusive_right=False):
     logical indicating if time is in any of the windows, size = (n,)
     """
 
-
-
-    """
-    util: Is time inside time window(s)?
-    :param tt:      n,    np.array   time counter
-    :param tbounds: k, 2  np.array   time windows
-    :return:        n, bool          logical indicating if time is in any of the windows
-    """
     # check if tbounds in np.array and if not fix it
     tbounds = np.array(tbounds)
     tt = np.array(tt)
@@ -88,8 +80,8 @@ def isin_time_windows(tt, tbounds, inclusive_left=True, inclusive_right=False):
 
 
 def threshcross(signal, thresh=0, direction='up'):
-    """
-    Finds the indices where a signal crosses a threshold.
+    """Finds the indices where a signal crosses a threshold.
+
     :param signal: np.array(Nx1)
     :param thresh: double, default=0
     :param direction: str, direction of crosses to detect. {'up'}, 'down', 'both'
