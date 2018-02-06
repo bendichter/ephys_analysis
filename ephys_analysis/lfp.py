@@ -23,7 +23,7 @@ def parse_passband(passband):
 
 def filter_lfp(lfp, passband, sampling_rate=1250, order=4, filter='butter',
                ripple=20):
-    """
+    """Apply a passband filter a signal
 
     Parameters
     ----------
@@ -43,7 +43,6 @@ def filter_lfp(lfp, passband, sampling_rate=1250, order=4, filter='butter',
         choose filter: {'butter'},'cheby2', 'fir1'
     ripple: double
         attenuation factor used for cheby2 filter
-
 
     Returns
     -------
@@ -66,8 +65,10 @@ def filter_lfp(lfp, passband, sampling_rate=1250, order=4, filter='butter',
     return filt
 
 
-def power_windows(filt, passband, power_thresh, sampling_rate=1250, starting_time=0.0):
-    """
+def power_windows(filt, passband, power_thresh, sampling_rate=1250,
+                  starting_time=0.0):
+    """Calculate the windows of time where the power of the signal is above a
+    theshold.
 
     Parameters
     ----------
@@ -105,7 +106,8 @@ def power_windows(filt, passband, power_thresh, sampling_rate=1250, starting_tim
 
 
 def hilbert_lfp(filt, use_octave=True):
-    """
+    """Calculate the phase and amplitude of a filtered signal. By default, this function
+    uses a bridge to octave because octave is much faster at hilbert transforms.
 
     Parameters
     ----------
@@ -134,6 +136,16 @@ def hilbert_lfp(filt, use_octave=True):
 
 
 def do_circstats(phases):
+    """Apply circular statistics to phase data
+
+    Parameters
+    ----------
+    phases: np.array
+
+    Returns
+    -------
+
+    """
 
     def circle_p(phases):
         n = len(phases)
@@ -151,7 +163,7 @@ def do_circstats(phases):
 
 
 def phase_modulation(lfp, spikes, passband, power_thresh, sampling_rate=1250.0,
-                     starting_time=0.0, use_octave=true):
+                     starting_time=0.0, use_octave=True):
     """
 
     Parameters
@@ -169,7 +181,7 @@ def phase_modulation(lfp, spikes, passband, power_thresh, sampling_rate=1250.0,
     power_thresh: float
     sampling_rate: float, optional, default = 1250.0
     starting_time: float, optional, default = 0.0
-    use_octave: bool, optional, default=true
+    use_octave: bool, optional, default=True
         Whether to use octave for computing the hilbert transform. It's much
         faster than python for this function in my experience.
 
