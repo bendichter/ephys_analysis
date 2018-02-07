@@ -6,14 +6,11 @@ from h5py import File
 
 from .analysis import phase_modulation
 from .vis import plot_mean_resultant_length, plot_phase_pref
-from .utils import listdict2dictlist
-
-import pdb
 
 
 def gather_fig2b(nwbfile, cell_types=('granule cell', 'mossy cell')):
 
-    nwbfile = '/Users/bendichter/Desktop/Buzsaki/SenzaiBuzsaki2017/YutaMouse41-150903/YutaMouse41-150903_1.nwb'
+    #nwbfile = '/Users/bendichter/Desktop/Buzsaki/SenzaiBuzsaki2017/YutaMouse41-150903/YutaMouse41-150903_1.nwb'
     f = File(nwbfile, 'r')
 
     # gather spikes across tasks
@@ -56,8 +53,8 @@ def gen_fig2b(theta_results, gamma_results, cell_types):
                               ('mean_resultant_length', plot_mean_resultant_length)):
             for cell_type, color in (('granule cell', 'orange'),
                                      ('mossy cell', 'purple')):
-                #sig = (results['p'][cell_types == cell_type] < .05) & \
-                #      (results['kappa'][cell_types == cell_type] >= 1.0)
+                #sig = results['p'] < .05) & results['kappa'] >= 1.0
+                #plotter(results[stat][(cell_types == cell_type) & sig], color=color, ax=axs[axc])
                 plotter(results[stat][cell_types == cell_type], color=color, ax=axs[axc])
 
             axc += 1
