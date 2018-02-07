@@ -103,3 +103,8 @@ def threshcross(signal, thresh=0, direction='up'):
         if up[-1] > down[-1]:
             down = np.hstack([down, len(signal)])
         return np.vstack([up, down]).T
+
+
+def listdict2dictlist(li):
+    # list of dicts -> dict of lists
+    return {key: np.array([x[key] for x in li]).ravel() for key in li[0].keys()}

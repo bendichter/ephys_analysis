@@ -2,8 +2,9 @@ from scipy.signal import hilbert, butter, filtfilt
 import numpy as np
 
 from snippets import circstats
+from tqdm import tqdm
 
-from .utils import rms, threshcross, isin_time_windows
+from .utils import rms, threshcross, isin_time_windows, listdict2dictlist
 
 
 def parse_passband(passband):
@@ -125,12 +126,12 @@ def hilbert_lfp(filt, use_octave=True):
         import oct2py
         oc = oct2py.Oct2Py()
         oc.eval('pkg load signal')
-        hilb = oc.hilbert(filt)
+        hilb = oc.hilbert(filt).ravel()
     else:
         hilb = hilbert(filt)
 
     amp = np.abs(hilb)
-    phase = np.mod(np.angle(hilb))
+    phase = np.mod(np.angle(hilb), 2*np.pi)
 
     return phase, amp
 
@@ -163,7 +164,7 @@ def do_circstats(phases):
 
 
 def phase_modulation(lfp, spikes, passband, power_thresh, sampling_rate=1250.0,
-                     starting_time=0.0, use_octave=True):
+                     starting_time=0.0, use_octave=True, desc='phase modulation'):
     """
 
     Parameters
@@ -197,12 +198,11 @@ def phase_modulation(lfp, spikes, passband, power_thresh, sampling_rate=1250.0,
     windows = power_windows(filt, passband, power_thresh, sampling_rate, starting_time)
 
     stats = []
-    for ispikes in spikes:
+    for ispikes in tqdm(spikes, desc=desc):
         in_windows = isin_time_windows(ispikes, windows)
         phases = filt_phase[(ispikes[in_windows] * sampling_rate).astype('int')]
         stats.append(do_circstats(phases))
 
-    # list of dicts -> dict of lists
-    stats = {key: [x[key] for x in stats] for key in stats[0].keys()}
+    stats = listdict2dictlist(stats)
 
     return stats
