@@ -1,0 +1,6 @@
+namespaces:
+- doc: general extensions
+  name: general
+  schema:
+  - namespace: core
+  - source: general.extensions.yaml

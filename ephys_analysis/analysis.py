@@ -9,36 +9,38 @@ from .utils import rms, threshcross, isin_time_windows, listdict2dictlist
 
 def parse_passband(passband):
     if passband == 'delta':
-        passband = [0, 4]
+        passband = (0, 4)
     elif passband == 'theta':
-        passband = [4, 10]
+        passband = (4, 10)
     elif passband == 'spindles':
-        passband = [10, 20]
+        passband = (10, 20)
     elif passband == 'gamma':
-        passband = [30, 80]
+        passband = (30, 80)
     elif passband == 'ripples':
-        passband = [100, 250]
+        passband = (100, 250)
 
     return passband
 
 
-def filter_lfp(lfp, passband, sampling_rate=1250, order=4, filter='butter',
+def filter_lfp(lfp, passband, sampling_rate=1250.0, order=4, filter='butter',
                ripple=20):
-    """Apply a passband filter a signal
+    """Apply a passband filter a signal. Butter is implemented but other
+    filters are not.
 
     Parameters
     ----------
     lfp: np.array
-        (n,)
+        (ntt,)
     passband: np.array | str
-        (low, high) of bandpass filter or one of the following canonical bands:
+        (low, high) of bandpass filter or the name of a canonical band:
             'delta':    (  0,   4)
             'theta':    (  4,  10)
             'spindles': ( 10,  20)
             'gamma':    ( 30,  80)
             'ripples':  (100, 250)
-    sampling_rate: double
-    order: double
+    sampling_rate: float, optional
+        sampling rate of LFP (default=1250.0)
+    order: int
         number of cycles (default=4)
     filter: str
         choose filter: {'butter'},'cheby2', 'fir1'
@@ -48,7 +50,7 @@ def filter_lfp(lfp, passband, sampling_rate=1250, order=4, filter='butter',
     Returns
     -------
     filt: np.array
-        (n,)
+        (ntt,)
 
     """
 
@@ -56,10 +58,8 @@ def filter_lfp(lfp, passband, sampling_rate=1250, order=4, filter='butter',
 
     if filter == 'butter':
         b, a = butter(order, passband / (sampling_rate / 2), 'bandpass')
-    elif filter == 'fir1':
+    elif filter in ('fir1', 'cheby2'):
         raise NotImplementedError('fir1 not implemented')
-    elif filter == 'cheby2':
-        raise NotImplementedError('cheby2 not implemented')
 
     filt = filtfilt(b, a, lfp)
 
@@ -75,8 +75,8 @@ def power_windows(filt, passband, power_thresh, sampling_rate=1250,
     ----------
     filt: np.array
         Filtered lfp signal. Usually, this is the output of filter_lfp.
-    passband: np.array | str
-        [low high] of bandpass filter or one of the following canonical bands:
+    passband: tuple | str
+        (low, high) of bandpass filter or one of the following canonical bands:
             'delta':    (  0,   4)
             'theta':    (  4,  10)
             'spindles': ( 10,  20)
@@ -165,7 +165,8 @@ def do_circstats(phases):
 
 def phase_modulation(lfp, spikes, passband, power_thresh, sampling_rate=1250.0,
                      starting_time=0.0, use_octave=True, desc='phase modulation'):
-    """
+    """Calculate circular statistics for the lfp phases of spike times for a
+    list of cells
 
     Parameters
     ----------
@@ -173,7 +174,7 @@ def phase_modulation(lfp, spikes, passband, power_thresh, sampling_rate=1250.0,
     spikes: list(np.array)
         list (k,) of list of spike times in seconds
     passband: np.array | str
-        [low high] of bandpass filter or one of the following canonical bands:
+        (low, high) of bandpass filter or one of the following canonical bands:
             'delta':    (  0,   4)
             'theta':    (  4,  10)
             'spindles': ( 10,  20)

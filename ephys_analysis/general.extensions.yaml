@@ -1,0 +1,42 @@
+groups:
+- datasets:
+  - doc: global id for neuron
+    dtype: int
+    name: cell_index
+    shape:
+    - null
+    - 1
+  - doc: Data values indexed by pointer
+    dtype: float
+    name: value
+    shape:
+    - null
+    - 1
+  - doc: Pointers that index data values
+    dtype: RefSpec
+    name: pointer
+    shape:
+    - null
+    - 1
+  doc: Population Spike Times
+  neurodata_type_def: PopulationSpikeTimes
+  neurodata_type_inc: NWBDataInterface
+- datasets:
+  - doc: global id for neuron
+    dtype: int
+    name: cell_index
+    shape:
+    - null
+    - 1
+  - doc: indices into values for each gid in order
+    dtype: RefSpec
+    name: indices
+    shape:
+    - null
+    - 1
+  - doc: list of unique values
+    dtype: str
+    name: values
+  doc: Categorical Cell Info
+  neurodata_type_def: CatCellInfo
+  neurodata_type_inc: NWBDataInterface
