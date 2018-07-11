@@ -4,6 +4,7 @@ import numpy as np
 from tqdm import tqdm
 
 from .utils import rms, threshcross, isin_time_windows, listdict2dictlist
+import circstats
 
 
 def parse_passband(passband):
@@ -137,7 +138,6 @@ def hilbert_lfp(filt, use_octave=True):
 
 
 def do_circstats(phases):
-    from snippets import circstats
     """Apply circular statistics to phase data
 
     Parameters

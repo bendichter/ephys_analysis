@@ -16,7 +16,7 @@ setup_args = {
     'url': 'https://github.com/ben.dichter/ephys_analysis',
     'license': "BSD",
     'packages': find_packages(),
-    'install_requires': ['numpy', 'scipy', 'tqdm', 'matplotlib', 'seaborn','python-snippets'],
+    'install_requires': ['numpy', 'scipy', 'tqdm', 'matplotlib', 'seaborn'],
     'classifiers': [
         "Programming Language :: Python",
         "Programming Language :: Python :: 2.7",
