@@ -1,7 +1,6 @@
 from scipy.signal import hilbert, butter, filtfilt
 import numpy as np
 
-from snippets import circstats
 from tqdm import tqdm
 
 from .utils import rms, threshcross, isin_time_windows, listdict2dictlist
@@ -22,7 +21,7 @@ def parse_passband(passband):
     return passband
 
 
-def filter_lfp(lfp, passband, sampling_rate=1250.0, order=4, filter='butter',
+def filter_lfp(lfp, sampling_rate=1250.0, passband='theta', order=4, filter='butter',
                ripple=20):
     """Apply a passband filter a signal. Butter is implemented but other
     filters are not.
@@ -31,6 +30,8 @@ def filter_lfp(lfp, passband, sampling_rate=1250.0, order=4, filter='butter',
     ----------
     lfp: np.array
         (ntt,)
+    sampling_rate: float, optional
+        sampling rate of LFP (default=1250.0)
     passband: np.array | str
         (low, high) of bandpass filter or the name of a canonical band:
             'delta':    (  0,   4)
@@ -38,8 +39,7 @@ def filter_lfp(lfp, passband, sampling_rate=1250.0, order=4, filter='butter',
             'spindles': ( 10,  20)
             'gamma':    ( 30,  80)
             'ripples':  (100, 250)
-    sampling_rate: float, optional
-        sampling rate of LFP (default=1250.0)
+
     order: int
         number of cycles (default=4)
     filter: str
@@ -137,6 +137,7 @@ def hilbert_lfp(filt, use_octave=True):
 
 
 def do_circstats(phases):
+    from snippets import circstats
     """Apply circular statistics to phase data
 
     Parameters
