@@ -2,7 +2,7 @@ from scipy.signal import hilbert, butter, filtfilt
 import numpy as np
 
 from .utils import rms, threshcross, isin_time_windows, listdict2dictlist
-import circstats
+from . import circstats
 
 
 def parse_passband(passband):
