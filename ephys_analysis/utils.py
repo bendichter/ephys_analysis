@@ -108,3 +108,9 @@ def threshcross(signal, thresh=0, direction='up'):
 def listdict2dictlist(li):
     # list of dicts -> dict of lists
     return {key: np.array([x[key] for x in li]).ravel() for key in li[0].keys()}
+
+
+def find_nearest(arr, tt):
+    arr = arr[arr > tt[0]]
+    arr = arr[arr < tt[-1]]
+    return np.searchsorted(tt, arr)
