@@ -105,29 +105,28 @@ def power_windows(filt, passband, power_thresh, sampling_rate=1250,
     return windows
 
 
-def hilbert_lfp(filt, use_octave=True):
+def next_power_of_2(x):
+    return 1 if x == 0 else 2**(x - 1).bit_length()
+
+
+def hilbert_lfp(filt):
     """Calculate the phase and amplitude of a filtered signal. By default, this function
     uses a bridge to octave because octave is much faster at hilbert transforms.
 
     Parameters
     ----------
-    filt: np.array
+    filt : np.array
         Filtered lfp signal. Usually, this is the output of filter_lfp.
-    use_octave: bool
-        Whether to use octave for computing the hilbert transform. It's much
-        faster than python for this function in my experience. default=true.
 
     Returns
     -------
+    phase : np.ndarray
+    amplitude : np.ndarray
 
     """
-    if use_octave:
-        import oct2py
-        oc = oct2py.Oct2Py()
-        oc.eval('pkg load signal')
-        hilb = oc.hilbert(filt).ravel()
-    else:
-        hilb = hilbert(filt)
+    # hilbert runs way faster on a power of 2
+    hilb = hilbert(filt, next_power_of_2(len(filt)))
+    hilb = hilb[:len(filt)]
 
     amp = np.abs(hilb)
     phase = np.mod(np.angle(hilb), 2*np.pi)
@@ -147,19 +146,10 @@ def do_circstats(phases):
 
     """
 
-    def circle_p(phases):
-        n = len(phases)
-        R = circstats.resvec(phases) * n
-
-        # Zar, Biostatistical Analysis, p. 617
-        p = np.exp(np.sqrt(1 + 4 * n + 4 * (n ** 2 - R ** 2)) - (1 + 2 * n))
-
-        return p
-
     return {'mean_resultant_length': circstats.resvec(phases),
             'mean_phase': circstats.mean(phases),
             'kappa': circstats.kappa(phases),
-            'p': circle_p(phases)}
+            'p': circstats.p(phases)}
 
 
 def phase_modulation(lfp, spikes, passband, power_thresh, sampling_rate=1250.0,
