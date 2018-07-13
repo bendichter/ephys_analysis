@@ -65,7 +65,7 @@ def filter_lfp(lfp, sampling_rate=1250.0, passband='theta', order=4, filter='but
     return filt
 
 
-def power_windows(filt, passband, power_thresh, sampling_rate=1250,
+def calc_power_windows(filt, passband, power_thresh, sampling_rate=1250,
                   starting_time=0.0):
     """Calculate the windows of time where the power of the signal is above a
     theshold.
@@ -153,7 +153,7 @@ def do_circstats(phases):
 
 
 def phase_modulation(lfp, spikes, passband, power_thresh, sampling_rate=1250.0,
-                     starting_time=0.0, use_octave=True, desc='phase modulation'):
+                     starting_time=0.0):
     """Calculate circular statistics for the lfp phases of spike times for a
     list of cells
 
@@ -172,9 +172,6 @@ def phase_modulation(lfp, spikes, passband, power_thresh, sampling_rate=1250.0,
     power_thresh: float
     sampling_rate: float, optional, default = 1250.0
     starting_time: float, optional, default = 0.0
-    use_octave: bool, optional, default=True
-        Whether to use octave for computing the hilbert transform. It's much
-        faster than python for this function in my experience.
 
     Returns
     -------
@@ -184,8 +181,8 @@ def phase_modulation(lfp, spikes, passband, power_thresh, sampling_rate=1250.0,
 
     """
     filt = filter_lfp(lfp, passband, sampling_rate)
-    filt_phase, _ = hilbert_lfp(filt, use_octave=use_octave)
-    windows = power_windows(filt, passband, power_thresh, sampling_rate, starting_time)
+    filt_phase, _ = hilbert_lfp(filt)
+    windows = calc_power_windows(filt, passband, power_thresh, sampling_rate, starting_time)
 
     stats = []
     for ispikes in spikes:
