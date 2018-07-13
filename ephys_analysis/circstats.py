@@ -1082,3 +1082,29 @@ def nankappa(alpha, axis=None, w=None, d=0):
     """
 
     return _kappa(alpha, True, axis=axis, w=w, d=d)
+
+
+def p(phases):
+    """Test for uniformity
+
+    Parameters
+    ----------
+    phases : np.ndarray
+        The array of angles
+
+    Returns
+    -------
+    out : np.ndarray
+        p-value of uniformity
+
+    References
+    ----------
+    Zar, Biostatistical Analysis, p. 617
+    """
+
+    n = len(phases)
+    R = resvec(phases) * n
+
+    p = np.exp(np.sqrt(1 + 4 * n + 4 * (n ** 2 - R ** 2)) - (1 + 2 * n))
+
+    return p
