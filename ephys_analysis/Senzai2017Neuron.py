@@ -3,11 +3,12 @@ import numpy as np
 import matplotlib.pyplot as plt
 import scipy
 
+from .utils import isin_single_interval, smooth, find_nearest
+
 from h5py import File
 
 from .analysis import phase_modulation
 from .vis import plot_mean_resultant_length, plot_phase_pref
-from .utils import threshcross
 from .data_io import get_cell_data
 
 
@@ -36,7 +37,7 @@ def compute_fig2b(lfp, spikes, sampling_rate):
     return theta_results, gamma_results
 
 
-def gen_fig2b(gamma_results, theta_results, cell_types):
+def plot_fig2b(gamma_results, theta_results, cell_types):
     fig, axs = plt.subplots(1, 4, figsize=(12, 3), sharey=True)
     axc = 0
     for results in (gamma_results, theta_results):
@@ -58,40 +59,54 @@ def gen_fig2b(gamma_results, theta_results, cell_types):
     axs[0].legend(('granule cells', 'mossy cells'))
 
 
-def get_position(fname):
-
-    aa = scipy.io.loadmat(fname)
-    pos = aa['twhl_linearized'][:, 1:]
-    pos_scale = 65 / 2
-    pos = pos * pos_scale  # in cm
-    tt = aa['twhl_linearized'][:, 0]
-
-    return pos, tt
+def linearize_trial(norm_trial_pos):
+    decision_ind = np.where(-norm_trial_pos[:, 0] > .95)[0][0]
+    x_center = -1 - norm_trial_pos[:decision_ind, 0]
+    x_arm = np.arctan2(np.abs(norm_trial_pos[decision_ind:, 1]), -norm_trial_pos[decision_ind:, 0])
+    full_run = np.hstack((x_center, x_arm + x_center[-1])) * .65 / 2
+    return full_run
 
 
-def compute_circular_T_place_fields(position, tt, spikes, pos_bin_length, speed_thresh):
-    # 1.86 cm spatial bins
-    # speed > 3 cm/s
-    # gaussian kernel: 5.57 cm
-    # place field: continuous 8.3 cm stretch (5 pixels)
-        # peak FR > 1 Hz
-        # there is a second condition that I don't understand:
-        # For the circular T-maze, a place field was defined as a continuous region of at least 8.3 cm (5 pixels) where the firing rate was above 50% of the local maximum firing rate and the peak firing rate of the area was > 1 Hz
-    #T-maze: 65 cm central arm, 102 cm left side arm, 102 cm right side arm)
-    speed = np.sqrt(np.sum(np.diff(position, axis=0) ** 2, 1)) / np.diff(tt)
-    speed = scipy.signal.medfilt(speed, 11)
-    speed[np.isnan(speed)] = 0
-    speed_windows = threshcross(speed, 3, 'both')
+def compute_linear_place_fields(trials_df, pos, pos_tt, spikes, direction,
+                                spatial_bins=np.arange(-.65, 1.02, .0168)):
 
-    xbins = np.linspace(0, 65, 36)
-    ybins = np.linspace(-102, 102, 110)
+    sampling_rate = len(pos_tt) / (np.max(pos_tt) - np.min(pos_tt))
 
+    trials_df = trials_df
 
+    df = trials_df
+    df = df[df[direction] == 1]
+    linearized_trials = list()
+    speeds = list()
 
+    running = np.zeros(len(pos), dtype='bool')
+    lin_pos = np.zeros(len(pos)) * np.nan
 
+    for i, row in list(df.iterrows()):
+        trial_inds = isin_single_interval(pos_tt, [row['start'], row['end']],
+                                          inclusive_left=True, inclusive_right=False)
+        trial_pos = pos[trial_inds, :]
+        linearized_pos = linearize_trial(trial_pos)
+        linearized_trials.append(linearized_pos)
+        lin_pos[trial_inds] = linearized_pos
 
+        speed = np.diff(linearized_pos) / np.diff(pos_tt[trial_inds])
+        speed = np.hstack((0, np.abs(smooth(speed, 40))))
+        speeds.append(speed)
 
-    pass
+        running[trial_inds] = speed > .03
+
+    # find pos_tt bin associated with each spike
+    spike_pos_inds = find_nearest(spikes, pos_tt)
+    # keep only spike_pos_inds where running for that ind is True
+    spike_pos_inds = spike_pos_inds[running[spike_pos_inds]]
+
+    Oc = np.histogram(lin_pos[running], spatial_bins)[0]
+    Spk = np.histogram(lin_pos[spike_pos_inds], spatial_bins)[0]
+    FR = Spk / Oc * sampling_rate
+    xx = spatial_bins[:-1] + (spatial_bins[1] - spatial_bins[0]) / 2
+
+    return FR, xx
 
 
 
