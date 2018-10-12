@@ -168,11 +168,16 @@ def compute_linear_firing_rate(trials_df, pos, pos_tt, spikes, direction,
     # find pos_tt bin associated with each spike
     spike_pos_inds = find_nearest(spikes, pos_tt)
 
-    occupancy = np.histogram(lin_pos, spatial_bins)[0][:-1] / sampling_rate
-    n_spikes = np.histogram(lin_pos[spike_pos_inds], spatial_bins)[0][:-1]
+    finite_lin_pos = lin_pos[np.isfinite(lin_pos)]
+
+    pos_on_spikes = lin_pos[spike_pos_inds]
+    finite_pos_on_spikes = pos_on_spikes[np.isfinite(pos_on_spikes)]
+
+    occupancy = np.histogram(finite_lin_pos, bins=spatial_bins)[0][:-2] / sampling_rate
+    n_spikes = np.histogram(finite_pos_on_spikes, bins=spatial_bins)[0][:-2]
 
     filtered_n_spikes = gaussian_filter(n_spikes, gaussian_sd / spatial_bin_len)
-    xx = spatial_bins[:-2] + (spatial_bins[1] - spatial_bins[0]) / 2
+    xx = spatial_bins[:-3] + (spatial_bins[1] - spatial_bins[0]) / 2
 
     return xx, occupancy, filtered_n_spikes
 
@@ -208,20 +213,21 @@ def compute_linear_place_fields(firing_rate, min_window_size=5,
     return is_place_field
 
 
-def compute_information_per_spike(occupancy, filtered_n_spikes):
+def info_per_spike(occupancy, filtered_n_spikes):
+    if all(filtered_n_spikes == 0):
+        return 0
+    eps = 2.22044604925e-16
     p_i = occupancy / np.sum(occupancy)
     lam_i = filtered_n_spikes / occupancy
     lam = np.mean(lam_i)
-    np.sum(p_i * lam_i / lam * np.log2(lam_i / lam))
+    return np.sum(p_i * lam_i / lam * np.log2(lam_i / lam + eps))
 
 
-def compute_information_per_sec(occupancy, filtered_n_spikes):
+def info_per_sec(occupancy, filtered_n_spikes):
+    if all(filtered_n_spikes == 0):
+        return 0
+    eps = 2.22044604925e-16
     p_i = occupancy / np.sum(occupancy)
     lam_i = filtered_n_spikes / occupancy
     lam = np.mean(lam_i)
-    np.sum(p_i * lam_i * np.log2(lam_i / lam))
-
-
-
-
-
+    return np.sum(p_i * lam_i * np.log2(lam_i / lam + eps))
