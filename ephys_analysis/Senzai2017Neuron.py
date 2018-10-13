@@ -1,7 +1,8 @@
 # Code to replicate Senzai2017Neuron figures
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy.ndimage.filters import gaussian_filter
+from scipy.ndimage.filters import gaussian_filter, maximum_filter
+from scipy.ndimage import label
 
 from .utils import isin_single_interval, smooth, find_nearest
 
@@ -116,6 +117,101 @@ def compute_lin_pos(trials_df, pos, pos_tt, direction,
     return lin_pos
 
 
+def compute_2d_firing_rate(pos, pos_tt, spikes, pixel_width=0.0092,
+                           speed_thresh=0.03, field_len=0.46,
+                           gaussian_sd=0.0184):
+    """Returns speed-gated occupancy and speed-gated and Gaussian-filtered firing rate
+
+    Parameters
+    ----------
+    pos: np.ndarray(dtype=float)
+        in meters
+    pos_tt: np.ndarray(dtype=float)
+        in seconds
+    spikes: np.ndarray(dtype=float)
+        in seconds
+    pixel_width float
+        in meters. Default = 0.92 cm
+    speed_thresh: float
+        in meters. Default = 3.0 cm/s
+    field_len: float
+        in meters. Default = 46 cm
+    gaussian_sd: float
+        in meters. Default = 1.84 cm
+
+    Returns
+    -------
+
+    occupancy: np.ndarray
+        in seconds
+    filtered_firing_rate: np.ndarray
+        in Hz
+
+    """
+
+    edges = np.arange(0, field_len + pixel_width, pixel_width)
+
+    sampling_period = (np.max(pos_tt) - np.min(pos_tt)) / len(pos_tt)
+
+    speed = np.hstack((0, np.sqrt(np.sum(np.diff(pos.T) ** 2, axis=0)) / np.diff(pos_tt)))
+    running = speed > speed_thresh
+    run_pos = pos[running, :]
+
+    occupancy = np.histogram2d(run_pos[:, 0],
+                               run_pos[:, 1],
+                               [edges, edges])[0] * sampling_period  # in seconds
+
+    spike_pos_inds = find_nearest(spikes, pos_tt)
+    spike_pos_inds = spike_pos_inds[running[spike_pos_inds]]
+    pos_on_spikes = pos[spike_pos_inds, :]
+
+    n_spikes = np.histogram2d(pos_on_spikes[:, 0],
+                              pos_on_spikes[:, 1],
+                              [edges, edges])[0]
+
+    firing_rate = n_spikes / occupancy  # in Hz
+    firing_rate[np.isnan(firing_rate)] = 0
+
+    filtered_firing_rate = gaussian_filter(firing_rate, gaussian_sd / pixel_width)
+
+    return occupancy, filtered_firing_rate
+
+
+def compute_2d_place_fields(firing_rate, min_firing_rate=1, thresh=0.2, min_size=100):
+    """Compute place fields
+
+    Parameters
+    ----------
+    firing_rate: np.ndarray(NxN, dtype=float)
+    min_firing_rate: float
+        in Hz
+    thresh: float
+        % of local max
+    min_size: float
+        in pixels
+
+    Returns
+    -------
+    receptive_fields: np.nsarry(NxN, dtype=int)
+        Each receptive field is labeled with a unique integer
+    """
+
+    local_maxima_inds = firing_rate == maximum_filter(firing_rate, 3)
+    receptive_fields = np.zeros(firing_rate.shape, dtype=int)
+    n_receptive_fields = 0
+    for local_max in np.flip(np.sort(firing_rate[local_maxima_inds]), axis=0):
+        labeled_image, num_labels = label(firing_rate > max(local_max * thresh, min_firing_rate))
+        for i in range(1, num_labels):
+            image_label = labeled_image == i
+            if local_max in firing_rate[image_label]:
+                break
+        if np.sum(image_label) >= min_size:
+            n_receptive_fields += 1
+            receptive_fields[image_label] = n_receptive_fields
+            firing_rate[image_label] = 0
+    return receptive_fields
+
+
 def compute_linear_firing_rate(trials_df, pos, pos_tt, spikes, direction,
                                gaussian_sd=0.0557, diameter=0.65,
                                spatial_bin_len=0.0168, running_speed=0.03):
@@ -138,7 +234,7 @@ def compute_linear_firing_rate(trials_df, pos, pos_tt, spikes, direction,
     diameter: float
         in meters. Default = 65 cm
     spatial_bin_len: float
-        in meters. Detault = 1.68 cm
+        in meters. Default = 1.68 cm
     running_speed: float
         in m/s. Default = 3 cm/s
 
@@ -176,10 +272,12 @@ def compute_linear_firing_rate(trials_df, pos, pos_tt, spikes, direction,
     occupancy = np.histogram(finite_lin_pos, bins=spatial_bins)[0][:-2] / sampling_rate
     n_spikes = np.histogram(finite_pos_on_spikes, bins=spatial_bins)[0][:-2]
 
-    filtered_n_spikes = gaussian_filter(n_spikes, gaussian_sd / spatial_bin_len)
+    firing_rate = n_spikes / occupancy
+
+    filtered_firing_rate = gaussian_filter(firing_rate, gaussian_sd / spatial_bin_len)
     xx = spatial_bins[:-3] + (spatial_bins[1] - spatial_bins[0]) / 2
 
-    return xx, occupancy, filtered_n_spikes
+    return xx, occupancy, filtered_firing_rate
 
 
 def compute_linear_place_fields(firing_rate, min_window_size=5,
@@ -213,21 +311,25 @@ def compute_linear_place_fields(firing_rate, min_window_size=5,
     return is_place_field
 
 
-def info_per_spike(occupancy, filtered_n_spikes):
-    if all(filtered_n_spikes == 0):
+def info_per_spike(occupancy, firing_rate):
+    if all(firing_rate == 0):
         return 0
     eps = 2.22044604925e-16
+    occupancy = occupancy.ravel()
+    firing_rate = firing_rate.ravel()
     p_i = occupancy / np.sum(occupancy)
-    lam_i = filtered_n_spikes / occupancy
+    lam_i = firing_rate
     lam = np.mean(lam_i)
     return np.sum(p_i * lam_i / lam * np.log2(lam_i / lam + eps))
 
 
-def info_per_sec(occupancy, filtered_n_spikes):
-    if all(filtered_n_spikes == 0):
+def info_per_sec(occupancy, firing_rate):
+    if all(firing_rate == 0):
         return 0
     eps = 2.22044604925e-16
+    occupancy = occupancy.ravel()
+    firing_rate = firing_rate.ravel()
     p_i = occupancy / np.sum(occupancy)
-    lam_i = filtered_n_spikes / occupancy
+    lam_i = firing_rate
     lam = np.mean(lam_i)
     return np.sum(p_i * lam_i * np.log2(lam_i / lam + eps))
