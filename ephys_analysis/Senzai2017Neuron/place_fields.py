@@ -1,71 +1,32 @@
-# Code to replicate Senzai2017Neuron figures
 import numpy as np
-import matplotlib.pyplot as plt
 from scipy.ndimage.filters import gaussian_filter, maximum_filter
 from scipy.ndimage import label
 
-from .utils import isin_single_interval, smooth, find_nearest
-
-from h5py import File
-
-from .analysis import phase_modulation
-from .vis import plot_mean_resultant_length, plot_phase_pref
-from .data_io import get_cell_data
-
-
-def gather_fig2b(nwbfile):
-
-    #nwbfile = '/Users/bendichter/Desktop/Buzsaki/SenzaiBuzsaki2017/YutaMouse41-150903/YutaMouse41-150903_1.nwb'
-
-    spikes, cell_types = get_cell_data(nwbfile)
-
-    with File(nwbfile, 'r') as f:
-        lfp = f['processing']['shared']['LFP']['LFP']['data'][:]
-        sampling_rate = f['processing']['shared']['LFP']['LFP']['starting_time'].attrs['rate']
-
-    return spikes, cell_types, lfp, sampling_rate
-    
-
-def compute_fig2b(lfp, spikes, sampling_rate):
-    theta_results = phase_modulation(lfp, spikes, 'theta', power_thresh=0.5,
-                                     sampling_rate=sampling_rate,
-                                     desc='theta phase modulation')
-
-    gamma_results = phase_modulation(lfp, spikes, 'gamma', power_thresh=1.0,
-                                     sampling_rate=sampling_rate,
-                                     desc='gamma phase modulation')
-
-    return theta_results, gamma_results
-
-
-def plot_fig2b(gamma_results, theta_results, cell_types):
-    fig, axs = plt.subplots(1, 4, figsize=(12, 3), sharey=True)
-    axc = 0
-    for results in (gamma_results, theta_results):
-        for stat, plotter in (('mean_phase', plot_phase_pref),
-                              ('mean_resultant_length', plot_mean_resultant_length)):
-            for cell_type, color in (('granule cell', 'orange'),
-                                     ('mossy cell', 'purple')):
-                #sig = results['p'] < .05) & results['kappa'] >= 1.0
-                #plotter(results[stat][(cell_types == cell_type) & sig],
-                #        color=color, ax=axs[axc])
-                plotter(results[stat][cell_types == cell_type], color=color,
-                        ax=axs[axc])
-
-            axc += 1
-
-    axs[0].set_ylabel('neurons')
-    axs[0].set_xlabel('phase')
-    axs[1].set_xlabel('mean length')
-    axs[0].legend(('granule cells', 'mossy cells'))
+from ephys_analysis.utils import isin_single_interval, smooth, find_nearest
 
 
 def linearize_trial(norm_trial_pos, diameter):
+    """Linearize a single trial position series from a theta maze
+
+    Parameters
+    ----------
+    norm_trial_pos: np.ndarray
+        Entire maze bounded by (0, 1, 0, 1)
+    diameter: float
+        Diameter of the maze in meters
+
+    Returns
+    -------
+    np.ndarray
+
+    """
+
     decision_ind = np.where(-norm_trial_pos[:, 0] > .95)[0][0]
     x_center = -1 - norm_trial_pos[:decision_ind, 0]
     x_arm = np.arctan2(np.abs(norm_trial_pos[decision_ind:, 1]),
                        -norm_trial_pos[decision_ind:, 0])
     full_run = np.hstack((x_center, x_arm + x_center[-1])) * diameter / 2
+
     return full_run
 
 
@@ -81,12 +42,14 @@ def compute_lin_pos(trials_df, pos, pos_tt, direction,
     pos_tt: np.ndarray
     direction: str
     diameter: float
-        in meters
+        Diameter of the maze in meters
     running_speed: float
         in m/s. Default = 3 cm/s
 
     Returns
     -------
+    lin pos: np.ndarray
+        Linearized position
 
     """
 
@@ -117,6 +80,93 @@ def compute_lin_pos(trials_df, pos, pos_tt, direction,
     return lin_pos
 
 
+def compute_running(pos, pos_tt, speed_thresh):
+    """
+
+    Parameters
+    ----------
+    pos: np.ndarray(dtype=float)
+        in meters
+    pos_tt: np.ndarray(dtype=float)
+        in seconds
+    speed_thresh: float, optional
+        in meters. Default = 3.0 cm/s
+
+    Returns
+    -------
+    running: np.ndarray(dtype=bool)
+
+    """
+    speed = np.hstack((0, np.sqrt(np.sum(np.diff(pos.T) ** 2, axis=0)) / np.diff(pos_tt)))
+    return speed > speed_thresh
+
+
+def compute_2d_occupancy(pos, pos_tt, edges, speed_thresh=0.03, running=None):
+    """
+
+    Parameters
+    ----------
+    pos: np.ndarray(dtype=float)
+        in meters
+    pos_tt: np.ndarray(dtype=float)
+        in seconds
+    speed_thresh: float, optional
+        in meters. Default = 3.0 cm/s
+    running: np.ndarray(dtype=bool), optional
+
+    Returns
+    -------
+
+    """
+
+    sampling_period = (np.max(pos_tt) - np.min(pos_tt)) / len(pos_tt)
+
+    if running is None:
+        running = compute_running(pos, pos_tt, speed_thresh)
+
+    run_pos = pos[running, :]
+
+    occupancy = np.histogram2d(run_pos[:, 0],
+                               run_pos[:, 1],
+                               [edges, edges])[0] * sampling_period  # in seconds
+
+    return occupancy, running
+
+
+def compute_2d_n_spikes(pos, pos_tt, spikes, edges, speed_thresh=0.03, running=None):
+    """Returns speed-gated occupancy and speed-gated and Gaussian-filtered firing rate
+
+    Parameters
+    ----------
+    pos: np.ndarray(dtype=float)
+        in meters
+    pos_tt: np.ndarray(dtype=float)
+        in seconds
+    spikes: np.ndarray(dtype=float)
+        in seconds
+    speed_thresh: float
+        in meters. Default = 3.0 cm/s
+    running: np.ndarray(dtype=bool), optional
+
+
+    Returns
+    -------
+    """
+
+    if running is None:
+        running = compute_running(pos, pos_tt, speed_thresh)
+
+    spike_pos_inds = find_nearest(spikes, pos_tt)
+    spike_pos_inds = spike_pos_inds[running[spike_pos_inds]]
+    pos_on_spikes = pos[spike_pos_inds, :]
+
+    n_spikes = np.histogram2d(pos_on_spikes[:, 0],
+                              pos_on_spikes[:, 1],
+                              [edges, edges])[0]
+
+    return n_spikes
+
+
 def compute_2d_firing_rate(pos, pos_tt, spikes, pixel_width=0.0092,
                            speed_thresh=0.03, field_len=0.46,
                            gaussian_sd=0.0184):
@@ -144,37 +194,23 @@ def compute_2d_firing_rate(pos, pos_tt, spikes, pixel_width=0.0092,
 
     occupancy: np.ndarray
         in seconds
-    filtered_firing_rate: np.ndarray
+    filtered_firing_rate: np.ndarray(shape=(cell, x, y), dtype=float)
         in Hz
 
     """
 
     edges = np.arange(0, field_len + pixel_width, pixel_width)
 
-    sampling_period = (np.max(pos_tt) - np.min(pos_tt)) / len(pos_tt)
+    occupancy, running = compute_2d_occupancy(pos, pos_tt, edges)
 
-    speed = np.hstack((0, np.sqrt(np.sum(np.diff(pos.T) ** 2, axis=0)) / np.diff(pos_tt)))
-    running = speed > speed_thresh
-    run_pos = pos[running, :]
-
-    occupancy = np.histogram2d(run_pos[:, 0],
-                               run_pos[:, 1],
-                               [edges, edges])[0] * sampling_period  # in seconds
-
-    spike_pos_inds = find_nearest(spikes, pos_tt)
-    spike_pos_inds = spike_pos_inds[running[spike_pos_inds]]
-    pos_on_spikes = pos[spike_pos_inds, :]
-
-    n_spikes = np.histogram2d(pos_on_spikes[:, 0],
-                              pos_on_spikes[:, 1],
-                              [edges, edges])[0]
+    n_spikes = compute_2d_n_spikes(pos, pos_tt, spikes, edges, speed_thresh)
 
     firing_rate = n_spikes / occupancy  # in Hz
     firing_rate[np.isnan(firing_rate)] = 0
 
     filtered_firing_rate = gaussian_filter(firing_rate, gaussian_sd / pixel_width)
 
-    return occupancy, filtered_firing_rate
+    return occupancy, filtered_firing_rate, edges
 
 
 def compute_2d_place_fields(firing_rate, min_firing_rate=1, thresh=0.2, min_size=100):
@@ -188,27 +224,32 @@ def compute_2d_place_fields(firing_rate, min_firing_rate=1, thresh=0.2, min_size
     thresh: float
         % of local max
     min_size: float
-        in pixels
+        minimum size of place field in pixels
 
     Returns
     -------
-    receptive_fields: np.nsarry(NxN, dtype=int)
+    receptive_fields: np.ndarray(NxN, dtype=int)
         Each receptive field is labeled with a unique integer
     """
 
     local_maxima_inds = firing_rate == maximum_filter(firing_rate, 3)
     receptive_fields = np.zeros(firing_rate.shape, dtype=int)
     n_receptive_fields = 0
+    firing_rate = firing_rate.copy()
     for local_max in np.flip(np.sort(firing_rate[local_maxima_inds]), axis=0):
-        labeled_image, num_labels = label(firing_rate > max(local_max * thresh, min_firing_rate))
-        for i in range(1, num_labels):
+        labeled_image, num_labels = label(firing_rate > max(local_max * thresh,
+                                                            min_firing_rate))
+        if not num_labels:  # nothing above min_firing_thresh
+            return receptive_fields
+        for i in range(1, num_labels + 1):
             image_label = labeled_image == i
             if local_max in firing_rate[image_label]:
                 break
-        if np.sum(image_label) >= min_size:
-            n_receptive_fields += 1
-            receptive_fields[image_label] = n_receptive_fields
-            firing_rate[image_label] = 0
+            if np.sum(image_label) >= min_size:
+                n_receptive_fields += 1
+                receptive_fields[image_label] = n_receptive_fields
+                firing_rate[image_label] = 0
+
     return receptive_fields
 
 
@@ -315,8 +356,11 @@ def info_per_spike(occupancy, firing_rate):
     if all(firing_rate == 0):
         return 0
     eps = 2.22044604925e-16
+
+    # in case occupancy and firing_rate are 2D
     occupancy = occupancy.ravel()
     firing_rate = firing_rate.ravel()
+
     p_i = occupancy / np.sum(occupancy)
     lam_i = firing_rate
     lam = np.mean(lam_i)
@@ -327,8 +371,10 @@ def info_per_sec(occupancy, firing_rate):
     if all(firing_rate == 0):
         return 0
     eps = 2.22044604925e-16
+    # in case occupancy and firing_rate are 2D
     occupancy = occupancy.ravel()
     firing_rate = firing_rate.ravel()
+
     p_i = occupancy / np.sum(occupancy)
     lam_i = firing_rate
     lam = np.mean(lam_i)
