@@ -114,3 +114,9 @@ def find_nearest(arr, tt):
     arr = arr[arr > tt[0]]
     arr = arr[arr < tt[-1]]
     return np.searchsorted(tt, arr)
+
+
+def smooth(y, box_pts):
+    box = np.ones(box_pts) / box_pts
+    y_smooth = np.convolve(y, box, mode='same')
+    return y_smooth

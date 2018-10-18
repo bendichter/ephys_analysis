@@ -1,6 +1,6 @@
 from pynwb import NWBHDF5IO, load_namespaces
 from pynwb.ecephys import FilteredEphys, ElectricalSeries
-from analysis import filter_lfp, hilbert_lfp
+from .band_analysis import filter_lfp, hilbert_lfp
 
 ns_path = 'general.namespace.yaml'
 load_namespaces(ns_path)
