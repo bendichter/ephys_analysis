@@ -6,16 +6,29 @@ from . import circstats
 
 
 def parse_passband(passband):
+    """
+
+    Parameters
+    ----------
+    passband: np.array | str
+        (low, high) of bandpass filter or one of the following canonical bands:
+            'delta':    (  0,   4)
+            'theta':    (  4,  10)
+            'spindles': ( 10,  20)
+            'gamma':    ( 30,  80)
+            'ripples':  (100, 250)
+
+    """
     if passband == 'delta':
-        passband = (0, 4)
+        passband = np.array([0, 4])
     elif passband == 'theta':
-        passband = (4, 10)
+        passband = np.array([4, 10])
     elif passband == 'spindles':
-        passband = (10, 20)
+        passband = np.array([10, 20])
     elif passband == 'gamma':
-        passband = (30, 80)
+        passband = np.array([30, 80])
     elif passband == 'ripples':
-        passband = (100, 250)
+        passband = np.array([100, 250])
 
     return passband
 
@@ -57,12 +70,10 @@ def filter_lfp(lfp, sampling_rate=1250.0, passband='theta', order=4, filter='but
 
     if filter == 'butter':
         b, a = butter(order, passband / (sampling_rate / 2), 'bandpass')
-    elif filter in ('fir1', 'cheby2'):
-        raise NotImplementedError('fir1 not implemented')
-
-    filt = filtfilt(b, a, lfp)
-
-    return filt
+        filt = filtfilt(b, a, lfp)
+        return filt
+    else:
+        NotImplementedError('filter type not implemented')
 
 
 def calc_power_windows(filt, passband, power_thresh, sampling_rate=1250,
