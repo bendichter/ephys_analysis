@@ -30,17 +30,15 @@ def linearize_trial(norm_trial_pos, diameter):
     return full_run
 
 
-def compute_lin_pos(trials_df, pos, pos_tt, direction,
-                    diameter, running_speed=.03):
+def compute_lin_pos(trials_df, pos, pos_tt, diameter, running_speed=.03):
     """Compute linearized position across trials. Only include points where
     the direction is the chosen direction and animal is running
 
     Parameters
     ----------
-    trials_df:pd.DataFrame
+    trials_df: pd.DataFrame
     pos: np.ndarray
     pos_tt: np.ndarray
-    direction: str
     diameter: float
         Diameter of the maze in meters
     running_speed: float
@@ -53,16 +51,11 @@ def compute_lin_pos(trials_df, pos, pos_tt, direction,
 
     """
 
-    trials_df = trials_df
-
-    df = trials_df
-    df = df[df[direction] == 1]
-
     running = np.zeros(len(pos), dtype='bool')
     lin_pos = np.zeros(len(pos)) * np.nan
 
-    for i, row in list(df.iterrows()):
-        trial_inds = isin_single_interval(pos_tt, [row['start'], row['end']],
+    for i, row in list(trials_df.iterrows()):
+        trial_inds = isin_single_interval(pos_tt, [row['start_time'], row['stop_time']],
                                           inclusive_left=True,
                                           inclusive_right=False)
         trial_pos = pos[trial_inds, :]
@@ -253,7 +246,7 @@ def compute_2d_place_fields(firing_rate, min_firing_rate=1, thresh=0.2, min_size
     return receptive_fields
 
 
-def compute_linear_firing_rate(trials_df, pos, pos_tt, spikes, direction,
+def compute_linear_firing_rate(trials_df, pos, pos_tt, spikes,
                                gaussian_sd=0.0557, diameter=0.65,
                                spatial_bin_len=0.0168, running_speed=0.03):
     """The occupancy and number of spikes, speed-gated, binned, and smoothed
@@ -262,14 +255,13 @@ def compute_linear_firing_rate(trials_df, pos, pos_tt, spikes, direction,
     Parameters
     ----------
     trials_df: pd.DataFrame
-        trials info
+        trials info. Include only trials that you want to keep
     pos: np.ndarray
         normalized x,y position for theta (aka eight) maze
     pos_tt: np.ndarray
         sample times in seconds
     spikes: np.ndarray
         for a single cell in seconds
-    direction: str
     gaussian_sd: float
         in meters. Default = 5.57 cm
     diameter: float
@@ -299,7 +291,7 @@ def compute_linear_firing_rate(trials_df, pos, pos_tt, spikes, direction,
 
     sampling_rate = len(pos_tt) / (np.max(pos_tt) - np.min(pos_tt))
 
-    lin_pos = compute_lin_pos(trials_df, pos, pos_tt, direction, diameter,
+    lin_pos = compute_lin_pos(trials_df, pos, pos_tt, diameter,
                               running_speed)
 
     # find pos_tt bin associated with each spike

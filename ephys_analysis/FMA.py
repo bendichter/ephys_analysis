@@ -8,6 +8,17 @@ from scipy.ndimage import label
 
 
 def find_field(firing_rate, threshold):
+    """Copies FMAToolbox
+
+    Parameters
+    ----------
+    firing_rate
+    threshold
+
+    Returns
+    -------
+
+    """
     mm = np.max(firing_rate)
 
     labeled_image, num_labels = label(firing_rate > threshold)
@@ -15,6 +26,64 @@ def find_field(firing_rate, threshold):
         image_label = labeled_image == i
         if mm in firing_rate[image_label]:
             return image_label
+
+
+def find_field2(firing_rate, thresh):
+    """Only works for 1D
+
+    Parameters
+    ----------
+    firing_rate: np.array
+    thresh: float
+
+    Returns
+    -------
+
+    """
+    firing_rate = np.array(firing_rate)
+    imm = np.argmax(firing_rate)
+    mm = np.max(firing_rate)
+    first = np.where(np.diff(firing_rate[:imm]) < 0)[0]
+    if len(first) == 0:
+        first = 0
+    else:
+        first = first[-1] + 2
+
+    last = np.where(np.diff(firing_rate[imm:]) > 0)[0]
+
+    if len(last) == 0:
+        last = len(firing_rate)
+    else:
+        last = last[0] + imm + 1
+    field_buffer = np.zeros(firing_rate.shape, dtype='bool')
+    field_buffer[first:last] = True
+    field = field_buffer & (firing_rate > thresh * mm)
+
+    return field_buffer, field
+
+
+def map_stats2(firing_rate, threshold=0.1, min_size=5, min_peak=1.0):
+    firing_rate = firing_rate.copy()
+    #firing_rate = firing_rate - np.min(firing_rate)
+    out = dict(sizes=list(), peaks=list(), means=list())
+    out['fields'] = np.zeros(firing_rate.shape)
+    field_counter = 1
+    while True:
+        peak = np.max(firing_rate)
+        if peak < min_peak:
+            break
+        field_buffer, field = find_field2(firing_rate, threshold)
+        field_size = np.sum(field)
+        if field_size > min_size and \
+                (np.max(firing_rate[field]) > (2 * np.min(firing_rate[field_buffer]))):
+            out['fields'][field] = field_counter
+            out['sizes'].append(field_size)
+            out['peaks'].append(peak)
+            out['means'].append(np.mean(firing_rate[field]))
+            field_counter += 1
+        firing_rate[field_buffer] = 0
+
+    return out
 
 
 def map_stats(firing_rate, threshold=0.2, min_size=None, min_peak=1.0):
@@ -47,6 +116,7 @@ def map_stats(firing_rate, threshold=0.2, min_size=None, min_peak=1.0):
             raise ValueError('no default min size value for 3+D maps')
 
     firing_rate = firing_rate.copy()
+    firing_rate = firing_rate - np.min(firing_rate)
     out = dict(fields=list(), sizes=list(), peaks=list(), means=list())
     while True:
         peak = np.max(firing_rate)
@@ -54,14 +124,14 @@ def map_stats(firing_rate, threshold=0.2, min_size=None, min_peak=1.0):
         if peak < min_peak:
             break
 
-        field1 = find_field(firing_rate, peak * threshold)
+        field1 = find_field2(firing_rate, peak * threshold)
         size1 = np.sum(field1)
         # Does this field include two coalescent subfields? To answer this
         # this question, we simply re-run the same field-searching procedure on
         # the field we then either keep the original field or choose the
         # subfield if the latter is less than 1/2 the size of the former
         m = peak * threshold
-        field2 = find_field(firing_rate-m, (peak-m) * threshold)
+        field2 = find_field2(firing_rate-m, (peak-m) * threshold)
         size2 = np.sum(field2)
 
         if size2 < 1/2 * size1:
