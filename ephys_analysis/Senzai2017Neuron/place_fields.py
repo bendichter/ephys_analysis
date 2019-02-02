@@ -1,6 +1,6 @@
 import numpy as np
-from scipy.ndimage.filters import gaussian_filter, maximum_filter
 from scipy.ndimage import label
+from scipy.ndimage.filters import gaussian_filter, maximum_filter
 
 from ephys_analysis.utils import isin_single_interval, smooth, find_nearest
 
@@ -74,7 +74,7 @@ def compute_lin_pos(trials_df, pos, pos_tt, diameter, running_speed=.03):
 
 
 def compute_running(pos, pos_tt, speed_thresh):
-    """
+    """Compute boolean of whether the speed of the animal was above a threshold for each time point
 
     Parameters
     ----------
@@ -95,7 +95,7 @@ def compute_running(pos, pos_tt, speed_thresh):
 
 
 def compute_2d_occupancy(pos, pos_tt, edges, speed_thresh=0.03, running=None):
-    """
+    """Computes occupancy per bin in seconds
 
     Parameters
     ----------
@@ -103,12 +103,17 @@ def compute_2d_occupancy(pos, pos_tt, edges, speed_thresh=0.03, running=None):
         in meters
     pos_tt: np.ndarray(dtype=float)
         in seconds
+    edges: np.ndarray(dtype=float)
+        edges of histogram in meters
     speed_thresh: float, optional
         in meters. Default = 3.0 cm/s
     running: np.ndarray(dtype=bool), optional
 
     Returns
     -------
+    occupancy: np.ndarray(dtype=float)
+        in seconds
+    running: np.ndarray(dtype=bool)
 
     """
 
@@ -137,6 +142,8 @@ def compute_2d_n_spikes(pos, pos_tt, spikes, edges, speed_thresh=0.03, running=N
         in seconds
     spikes: np.ndarray(dtype=float)
         in seconds
+    edges: np.ndarray(dtype=float)
+        edges of histogram in meters
     speed_thresh: float
         in meters. Default = 3.0 cm/s
     running: np.ndarray(dtype=bool), optional
@@ -173,7 +180,7 @@ def compute_2d_firing_rate(pos, pos_tt, spikes, pixel_width=0.0092,
         in seconds
     spikes: np.ndarray(dtype=float)
         in seconds
-    pixel_width float
+    pixel_width: float
         in meters. Default = 0.92 cm
     speed_thresh: float
         in meters. Default = 3.0 cm/s
@@ -229,7 +236,7 @@ def compute_2d_place_fields(firing_rate, min_firing_rate=1, thresh=0.2, min_size
     receptive_fields = np.zeros(firing_rate.shape, dtype=int)
     n_receptive_fields = 0
     firing_rate = firing_rate.copy()
-    for local_max in np.flip(np.sort(firing_rate[local_maxima_inds]), axis=0):
+    for local_max in np.flipud(np.sort(firing_rate[local_maxima_inds])):
         labeled_image, num_labels = label(firing_rate > max(local_max * thresh,
                                                             min_firing_rate))
         if not num_labels:  # nothing above min_firing_thresh
@@ -371,3 +378,11 @@ def info_per_sec(occupancy, firing_rate):
     lam_i = firing_rate
     lam = np.mean(lam_i)
     return np.sum(p_i * lam_i * np.log2(lam_i / lam + eps))
+
+
+def plot_1d_place_fields(ax, xx, place_fields):
+    if np.any(place_fields):
+        for i_field in range(1, int(max(place_fields))):
+            show_field = np.zeros(place_fields.shape) * np.nan
+            show_field[place_fields == i_field] = 0
+            ax.plot(xx, show_field)

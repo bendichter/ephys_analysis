@@ -15,7 +15,7 @@ setup(name='ephys_analysis',
       url='https://github.com/ben.dichter/ephys_analysis',
       license="BSD",
       packages=find_packages(),
-      install_requires=['numpy', 'scipy', 'matplotlib', 'seaborn'],
+      install_requires=['numpy', 'scipy', 'matplotlib', 'seaborn', 'pynwb'],
       classifiers=[
           "Programming Language :: Python",
           "Programming Language :: Python :: 2.7",
