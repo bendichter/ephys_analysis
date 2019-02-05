@@ -63,3 +63,13 @@ def plot_phase_pref(phases, ax=None, color='r', nbins=20, **kwargs):
 
     ax.plot(xx, n, color=color, **kwargs)
     despine(ax=ax)
+
+
+def plot_1d_place_fields(xx, place_fields, h=0, ax=None):
+    if ax is None:
+        ax = plt.gca()
+    if np.any(place_fields):
+        for i_field in range(int(max(place_fields))):
+            show_field = np.zeros(place_fields.shape) * np.nan
+            show_field[place_fields == i_field + 1] = h
+            ax.plot(xx, show_field)

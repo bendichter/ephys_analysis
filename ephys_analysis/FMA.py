@@ -43,6 +43,7 @@ def find_field2(firing_rate, thresh):
     firing_rate = np.array(firing_rate)
     imm = np.argmax(firing_rate)
     mm = np.max(firing_rate)
+    # TODO: make more efficient by using argmax instead of where()[0]
     first = np.where(np.diff(firing_rate[:imm]) < 0)[0]
     if len(first) == 0:
         first = 0
