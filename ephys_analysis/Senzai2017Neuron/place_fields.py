@@ -25,41 +25,48 @@ def linearize_trial(norm_trial_pos, diameter):
     x_center = -1 - norm_trial_pos[:decision_ind, 0]
     x_arm = np.arctan2(np.abs(norm_trial_pos[decision_ind:, 1]),
                        -norm_trial_pos[decision_ind:, 0])
-    full_run = np.hstack((x_center, x_arm + x_center[-1])) * diameter / 2
+    full_run = np.hstack((x_center, x_arm + x_center[-1])) * diameter / 2 + 2 / np.pi
 
     return full_run
 
 
-def compute_lin_pos(trials_df, pos, pos_tt, diameter, running_speed=.03):
-    """Compute linearized position across trials. Only include points where
-    the direction is the chosen direction and animal is running
+def linearize_session(pos, pos_tt, diameter=0.65, running_speed=.03, trials=None):
+    """Compute linearized position across trials. Only include points during the trials
+     of interest and while animal is running
 
     Parameters
     ----------
-    trials_df: pd.DataFrame
     pos: np.ndarray
+        normalized x,y position for theta (aka eight) maze
     pos_tt: np.ndarray
-    diameter: float
-        Diameter of the maze in meters
-    running_speed: float
+    diameter: float (optional)
+        in meters. Default = 65 cm
+    running_speed: float (optional)
         in m/s. Default = 3 cm/s
+    trials: np.ndarray (optional)
+        [[start1, end1], [start2, end2], ...]
 
     Returns
     -------
-    lin pos: np.ndarray
-        Linearized position
+    lin_pos: np.ndarray
+        Linearized position. If not running, lin_pos is NaN
 
     """
+
+    if trials is None:
+        trials = [[np.min(pos_tt), np.max(pos_tt)]]
 
     running = np.zeros(len(pos), dtype='bool')
     lin_pos = np.zeros(len(pos)) * np.nan
 
-    for i, row in list(trials_df.iterrows()):
-        trial_inds = isin_single_interval(pos_tt, [row['start_time'], row['stop_time']],
+    for i, trial in trials.iterrows():
+        trial_inds = isin_single_interval(pos_tt, [trial['start_time'], trial['stop_time']],
                                           inclusive_left=True,
                                           inclusive_right=False)
         trial_pos = pos[trial_inds, :]
         linearized_pos = linearize_trial(trial_pos, diameter)
+        if trial['condition'] == 'run_right':
+            linearized_pos += 1 + 2 / np.pi
         lin_pos[trial_inds] = linearized_pos
 
         speed = np.diff(linearized_pos) / np.diff(pos_tt[trial_inds])
@@ -74,7 +81,8 @@ def compute_lin_pos(trials_df, pos, pos_tt, diameter, running_speed=.03):
 
 
 def compute_running(pos, pos_tt, speed_thresh):
-    """Compute boolean of whether the speed of the animal was above a threshold for each time point
+    """Compute boolean of whether the speed of the animal was above a threshold
+    for each time point
 
     Parameters
     ----------
@@ -131,8 +139,10 @@ def compute_2d_occupancy(pos, pos_tt, edges, speed_thresh=0.03, running=None):
     return occupancy, running
 
 
-def compute_2d_n_spikes(pos, pos_tt, spikes, edges, speed_thresh=0.03, running=None):
-    """Returns speed-gated occupancy and speed-gated and Gaussian-filtered firing rate
+def compute_2d_n_spikes(pos, pos_tt, spikes, edges, speed_thresh=0.03,
+                        running=None):
+    """Returns speed-gated occupancy and speed-gated and Gaussian-filtered
+    firing rate
 
     Parameters
     ----------
@@ -170,7 +180,8 @@ def compute_2d_n_spikes(pos, pos_tt, spikes, edges, speed_thresh=0.03, running=N
 def compute_2d_firing_rate(pos, pos_tt, spikes, pixel_width=0.0092,
                            speed_thresh=0.03, field_len=0.46,
                            gaussian_sd=0.0184):
-    """Returns speed-gated occupancy and speed-gated and Gaussian-filtered firing rate
+    """Returns speed-gated occupancy and speed-gated and
+    Gaussian-filtered firing rate
 
     Parameters
     ----------
@@ -213,7 +224,8 @@ def compute_2d_firing_rate(pos, pos_tt, spikes, pixel_width=0.0092,
     return occupancy, filtered_firing_rate, edges
 
 
-def compute_2d_place_fields(firing_rate, min_firing_rate=1, thresh=0.2, min_size=100):
+def compute_2d_place_fields(firing_rate, min_firing_rate=1, thresh=0.2,
+                            min_size=100):
     """Compute place fields
 
     Parameters
@@ -253,30 +265,32 @@ def compute_2d_place_fields(firing_rate, min_firing_rate=1, thresh=0.2, min_size
     return receptive_fields
 
 
-def compute_linear_firing_rate(trials_df, pos, pos_tt, spikes,
-                               gaussian_sd=0.0557, diameter=0.65,
-                               spatial_bin_len=0.0168, running_speed=0.03):
+def compute_1d_occupancy(pos, spatial_bins, sampling_rate):
+    finite_lin_pos = pos[np.isfinite(pos)]
+
+    occupancy = np.histogram(
+        finite_lin_pos, bins=spatial_bins)[0][:-2] / sampling_rate
+
+    return occupancy
+
+
+def compute_linear_firing_rate(pos, pos_tt, spikes, gaussian_sd=0.0557,
+                               spatial_bin_len=0.0168):
     """The occupancy and number of spikes, speed-gated, binned, and smoothed
     over position
 
     Parameters
     ----------
-    trials_df: pd.DataFrame
-        trials info. Include only trials that you want to keep
     pos: np.ndarray
-        normalized x,y position for theta (aka eight) maze
+        linearized position
     pos_tt: np.ndarray
         sample times in seconds
     spikes: np.ndarray
         for a single cell in seconds
-    gaussian_sd: float
+    gaussian_sd: float (optional)
         in meters. Default = 5.57 cm
-    diameter: float
-        in meters. Default = 65 cm
-    spatial_bin_len: float
+    spatial_bin_len: float (optional)
         in meters. Default = 1.68 cm
-    running_speed: float
-        in m/s. Default = 3 cm/s
 
 
     Returns
@@ -291,30 +305,26 @@ def compute_linear_firing_rate(trials_df, pos, pos_tt, spikes,
         running, and processed with a Gaussian filter
 
     """
-    arm_len = diameter * np.pi / 2
-    # include an extra bin to catch boundary errors
-    spatial_bins = np.arange(-diameter, arm_len + spatial_bin_len,
+
+    spatial_bins = np.arange(np.min(pos), np.max(pos) + spatial_bin_len,
                              spatial_bin_len)
 
     sampling_rate = len(pos_tt) / (np.max(pos_tt) - np.min(pos_tt))
 
-    lin_pos = compute_lin_pos(trials_df, pos, pos_tt, diameter,
-                              running_speed)
+    occupancy = compute_1d_occupancy(pos, spatial_bins, sampling_rate)
 
     # find pos_tt bin associated with each spike
     spike_pos_inds = find_nearest(spikes, pos_tt)
 
-    finite_lin_pos = lin_pos[np.isfinite(lin_pos)]
-
-    pos_on_spikes = lin_pos[spike_pos_inds]
+    pos_on_spikes = pos[spike_pos_inds]
     finite_pos_on_spikes = pos_on_spikes[np.isfinite(pos_on_spikes)]
 
-    occupancy = np.histogram(finite_lin_pos, bins=spatial_bins)[0][:-2] / sampling_rate
     n_spikes = np.histogram(finite_pos_on_spikes, bins=spatial_bins)[0][:-2]
 
     firing_rate = n_spikes / occupancy
 
-    filtered_firing_rate = gaussian_filter(firing_rate, gaussian_sd / spatial_bin_len)
+    filtered_firing_rate = gaussian_filter(
+        firing_rate, gaussian_sd / spatial_bin_len)
     xx = spatial_bins[:-3] + (spatial_bins[1] - spatial_bins[0]) / 2
 
     return xx, occupancy, filtered_firing_rate
@@ -378,11 +388,3 @@ def info_per_sec(occupancy, firing_rate):
     lam_i = firing_rate
     lam = np.mean(lam_i)
     return np.sum(p_i * lam_i * np.log2(lam_i / lam + eps))
-
-
-def plot_1d_place_fields(ax, xx, place_fields):
-    if np.any(place_fields):
-        for i_field in range(1, int(max(place_fields))):
-            show_field = np.zeros(place_fields.shape) * np.nan
-            show_field[place_fields == i_field] = 0
-            ax.plot(xx, show_field)

@@ -8,12 +8,12 @@ from scipy.ndimage import label
 
 
 def find_field(firing_rate, threshold):
-    """Copies FMAToolbox
+    """Copied FMAToolbox
 
     Parameters
     ----------
-    firing_rate
-    threshold
+    firing_rate: np.ndarray
+    threshold: float
 
     Returns
     -------
@@ -25,7 +25,7 @@ def find_field(firing_rate, threshold):
     for i in range(1, num_labels + 1):
         image_label = labeled_image == i
         if mm in firing_rate[image_label]:
-            return image_label
+            return image_label, image_label
 
 
 def find_field2(firing_rate, thresh):
@@ -43,6 +43,7 @@ def find_field2(firing_rate, thresh):
     firing_rate = np.array(firing_rate)
     imm = np.argmax(firing_rate)
     mm = np.max(firing_rate)
+    # TODO: make more efficient by using argmax instead of where()[0]
     first = np.where(np.diff(firing_rate[:imm]) < 0)[0]
     if len(first) == 0:
         first = 0
@@ -64,7 +65,7 @@ def find_field2(firing_rate, thresh):
 
 def map_stats2(firing_rate, threshold=0.1, min_size=5, min_peak=1.0):
     firing_rate = firing_rate.copy()
-    #firing_rate = firing_rate - np.min(firing_rate)
+    firing_rate = firing_rate - np.min(firing_rate)
     out = dict(sizes=list(), peaks=list(), means=list())
     out['fields'] = np.zeros(firing_rate.shape)
     field_counter = 1
@@ -72,12 +73,12 @@ def map_stats2(firing_rate, threshold=0.1, min_size=5, min_peak=1.0):
         peak = np.max(firing_rate)
         if peak < min_peak:
             break
-        field_buffer, field = find_field2(firing_rate, threshold)
+        field_buffer, field = find_field(firing_rate, threshold)
         field_size = np.sum(field)
         if field_size > min_size and \
                 (np.max(firing_rate[field]) > (2 * np.min(firing_rate[field_buffer]))):
             out['fields'][field] = field_counter
-            out['sizes'].append(field_size)
+            out['sizes'].append(field_size / len(firing_rate))
             out['peaks'].append(peak)
             out['means'].append(np.mean(firing_rate[field]))
             field_counter += 1
