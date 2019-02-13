@@ -35,6 +35,22 @@ def rms(x, win_len):
 
 
 def isin_single_interval(tt, tbound, inclusive_left, inclusive_right):
+    """
+
+    Parameters
+    ----------
+    tt: array-like
+    tbound: array-like
+    inclusive_left: bool
+    inclusive_right: bool
+
+    Returns
+    -------
+    np.array(dtype=bool)
+
+    """
+    if not len(tbound) == 2:
+        raise Exception(ValueError, 'tbound must be of length 2')
     if inclusive_left:
         left_condition = (tt >= tbound[0])
     else:

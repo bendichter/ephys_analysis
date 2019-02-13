@@ -25,7 +25,7 @@ def linearize_trial(norm_trial_pos, diameter):
     x_center = -1 - norm_trial_pos[:decision_ind, 0]
     x_arm = np.arctan2(np.abs(norm_trial_pos[decision_ind:, 1]),
                        -norm_trial_pos[decision_ind:, 0])
-    full_run = np.hstack((x_center, x_arm + x_center[-1])) * diameter / 2
+    full_run = np.hstack((x_center, x_arm + x_center[-1])) * diameter / 2 + 2 / np.pi
 
     return full_run
 
@@ -59,12 +59,14 @@ def linearize_session(pos, pos_tt, diameter=0.65, running_speed=.03, trials=None
     running = np.zeros(len(pos), dtype='bool')
     lin_pos = np.zeros(len(pos)) * np.nan
 
-    for i, trial in trials:
-        trial_inds = isin_single_interval(pos_tt, trial,
+    for i, trial in trials.iterrows():
+        trial_inds = isin_single_interval(pos_tt, [trial['start_time'], trial['stop_time']],
                                           inclusive_left=True,
                                           inclusive_right=False)
         trial_pos = pos[trial_inds, :]
         linearized_pos = linearize_trial(trial_pos, diameter)
+        if trial['condition'] == 'run_right':
+            linearized_pos += 1 + 2 / np.pi
         lin_pos[trial_inds] = linearized_pos
 
         speed = np.diff(linearized_pos) / np.diff(pos_tt[trial_inds])
