@@ -24,7 +24,7 @@ def apply_baks_filter(spikes, tt, param=4):
     return baks(spikes, tt, a=param)[0]
 
 
-def apply_gaussian_filter(spikes, tt, d, param=0.15):
+def apply_gaussian_filter(spikes, tt, d, param=0.15, mode='constant'):
     """
 
     Parameters
@@ -33,6 +33,8 @@ def apply_gaussian_filter(spikes, tt, d, param=0.15):
     tt: array-like
     d: array-like
     param: float
+    mode: str (optional)
+        passed to scipy.ndimage.filters.gaussian_filter
 
     Returns
     -------
@@ -44,22 +46,22 @@ def apply_gaussian_filter(spikes, tt, d, param=0.15):
     diff_d = np.diff(d[:2])
     diff_tt = np.diff(tt[:2])
 
-    return gaussian_filter(spike_bins, param / diff_d, mode='constant') / diff_tt
+    return gaussian_filter(spike_bins, param / diff_d, mode=mode) / diff_tt
 
 
-def get_pop_stats(nwb, all_fr, param, tt, d, filt_type='gaussian', samp_size=5000, threshold=0.1, min_peak=0.2,
+def get_pop_stats(nwb, d, tt, all_fr, param, filt_type='gaussian', samp_size=5000, threshold=0.1, min_peak=0.2,
                   min_size=0.15):
     """Randomly select a subsample of neurons and gather the stats for imposed and detected firing rate into one DataFrame
 
     Parameters
     ----------
     nwb: pynwb.NWBFile
+    tt: time counter
+    d: space counter
     all_fr: array-like
     param: float
         If filt_type is 'baks', param is alpha
         If filt_type is 'gaussian', param is sd of filter
-    tt: time counter
-    d: space counter
     filt_type: str
         'gaussian' or 'baks'
     samp_size: int (optional)
@@ -92,12 +94,13 @@ def get_pop_stats(nwb, all_fr, param, tt, d, filt_type='gaussian', samp_size=500
             detected_firing_rate = apply_gaussian_filter(spikes, tt, d, param)
         else:
             ValueError('filter_type' + filt_type + ' not recognized.')
-
         imposed_stats = map_stats2(all_fr[cell_id], threshold=threshold, min_size=min_size, min_peak=min_peak)
         detected_stats = map_stats2(detected_firing_rate, threshold=threshold, min_size=min_size, min_peak=min_peak)
 
-        stats = {'imposed_' + key: val for key, val in imposed_stats}
-        stats.update(**{'detected_' + key: val for key, val in detected_stats})
+        stats = {'imposed_' + key: val for key, val in imposed_stats.items()}
+        stats.update(**{'detected_' + key: val for key, val in detected_stats.items()})
+        stats.update(firing_rate=all_fr[cell_id])
+        stats.update(detected_firing_rate=detected_firing_rate)
 
         df = df.append(pd.DataFrame([stats]))
     return df
@@ -116,6 +119,24 @@ def get_field_widths(df):
 
 
 def scan_params(nwb, d, tt, all_fr, params, filt_type, samp_size=5000):
+    """
+
+    Parameters
+    ----------
+    nwb: pynwb.NWBFile
+    d: array-like
+    tt: array-like
+    all_fr: np.array
+    params: int
+    filt_type: str
+    samp_size: int
+
+    Returns
+    -------
+
+    dict
+
+    """
     nfields_mse = []
     filt_mse = []
     field_widths_mse = []
@@ -127,7 +148,8 @@ def scan_params(nwb, d, tt, all_fr, params, filt_type, samp_size=5000):
         yy = [len(x) for x in df['detected_sizes'].values]
         nfields_mse.append(mean_squared_error(xx, yy))
 
-        filt_mse.append(np.mean([mean_squared_error(x, y) for x, y in zip(df['fr'], df['inf_fr'])]))
+        filt_mse.append(np.mean([mean_squared_error(x, y)
+                                 for x, y in zip(df['firing_rate'], df['detected_firing_rate'])]))
 
         field_widths_mse.append(mean_squared_error(*get_field_widths(df)))
 
