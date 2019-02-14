@@ -8,22 +8,6 @@ from tqdm import tqdm
 from sklearn.metrics import mean_squared_error
 
 
-def apply_baks_filter(spikes, tt, param=4):
-    """
-
-    Parameters
-    ----------
-    spikes: array-like
-    tt: array-like
-    param: array-like
-
-    Returns
-    -------
-
-    """
-    return baks(spikes, tt, a=param)[0]
-
-
 def apply_gaussian_filter(spikes, tt, d, param=0.15, mode='constant'):
     """
 
@@ -89,7 +73,7 @@ def get_pop_stats(nwb, d, tt, all_fr, param, filt_type='gaussian', samp_size=500
             continue
 
         if filt_type == 'baks':
-            detected_firing_rate = apply_baks_filter(spikes, tt, param)
+            detected_firing_rate = baks(spikes, tt, a=param)[0]
         elif filt_type == 'gaussian':
             detected_firing_rate = apply_gaussian_filter(spikes, tt, d, param)
         else:
