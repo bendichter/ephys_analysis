@@ -64,6 +64,14 @@ def find_field2(firing_rate, thresh):
 
 
 def map_stats2(firing_rate, threshold=0.1, min_size=5, min_peak=1.0):
+    """
+
+    :param firing_rate: array
+    :param threshold: float
+    :param min_size: int
+    :param min_peak: float
+    :return:
+    """
     firing_rate = firing_rate.copy()
     firing_rate = firing_rate - np.min(firing_rate)
     out = dict(sizes=list(), peaks=list(), means=list())
@@ -78,7 +86,7 @@ def map_stats2(firing_rate, threshold=0.1, min_size=5, min_peak=1.0):
         if field_size > min_size and \
                 (np.max(firing_rate[field]) > (2 * np.min(firing_rate[field_buffer]))):
             out['fields'][field] = field_counter
-            out['sizes'].append(field_size / len(firing_rate))
+            out['sizes'].append(float(field_size) / len(firing_rate))
             out['peaks'].append(peak)
             out['means'].append(np.mean(firing_rate[field]))
             field_counter += 1
