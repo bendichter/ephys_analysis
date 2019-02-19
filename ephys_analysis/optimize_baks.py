@@ -1,4 +1,3 @@
-from mpi4py import MPI
 from neuroh5.io import NeuroH5CellAttrGen
 from pynwb import NWBHDF5IO
 from nested.optimize_utils import *
@@ -38,6 +37,15 @@ def compute_distance_travelled(pos):
 @click.pass_context
 def main(cli, config_file_path, output_dir, export, export_file_path, label, verbose, plot, debug):
     """
+    Execute with default parameters on one process:
+    python optimize_baks.py --config-file-path=$PATH_TO_CONFIG_FILE  --plot
+
+    Execute with default parameters with multiple processes:
+    mpirun -n 7 python -m mpi4py.futures optimize_baks.py --config-file-path=$PATH_TO_CONFIG_FILE --plot
+
+    Execute parallel optimization:
+    mpirun -n 7 python -m mpi4py.futures -m nested.optimize optimize_baks.py \
+        --config-file-path=$PATH_TO_CONFIG_FILE --plot --pop-size=200 --path-lenght=3 --max-iter=50 --disp
 
     :param config_file_path: str (path)
     :param output_dir: str (path)
