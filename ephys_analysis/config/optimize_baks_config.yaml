@@ -19,8 +19,8 @@ get_features_stages:
 get_objectives:
   optimize_baks: get_objectives
 kwargs:
-  nwb_spikes_file_path: data/DG_PP_spikes_101718.nwb
-  neuroh5_rates_file_path: data/DG_PP_spikes_101718.h5
+  nwb_spikes_file_path: data/DG_PP_spiketrain_12142018.nwb  # data/DG_PP_spikes_101718.nwb
+  neuroh5_rates_file_path: data/DG_PP_spiketrain_12142018.h5  # data/DG_PP_spikes_101718.h5
   neuroh5_rates_namespace: 'Vector Stimulus 100'
   min_field_width: 0.15  # meters
   field_rate_threshold: 1.  # Hz
@@ -37,7 +37,7 @@ param_names:
 - beta
 target_range:
   num_fields: 0.1
-  field_width: 1. # cm
+  field_width: 0.01 # meters
   firing_rate: 0.1  # Hz
 target_val:
 x0:

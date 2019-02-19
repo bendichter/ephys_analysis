@@ -1,20 +1,13 @@
+from mpi4py import MPI
 from neuroh5.io import NeuroH5CellAttrGen
 from pynwb import NWBHDF5IO
 from nested.optimize_utils import *
 from collections import defaultdict
 import click
-from ephys_analysis.Senzai2017Neuron.place_fields import (
-    compute_linear_place_fields, compute_linear_firing_rate)
 from ephys_analysis.utils import find_nearest
-from ephys_analysis.FMA import map_stats, map_stats2
+from ephys_analysis.FMA import map_stats2
 from ephys_analysis.vis import plot_1d_place_fields
 from ephys_analysis.baks import baks
-from ephys_analysis.place_field_analysis import scan_params, get_pop_stats
-from tqdm import tqdm
-import pandas as pd
-from sklearn.metrics import confusion_matrix, mean_squared_error
-import seaborn as sns
-from scipy.ndimage.filters import gaussian_filter
 
 
 context = Context()
@@ -121,21 +114,22 @@ def init_context():
         clean_axes(axes)
         fig.show()
 
+    start_time = time.time()
     spike_trains = defaultdict(dict)
-
-    """
-    nwb_spikes_df = nwb_spikes.units.to_dataframe()
-    del nwb_spikes
+    nwb_gids = nwb_spikes.units.id.data[:]
+    nwb_cell_types = nwb_spikes.units['cell_type'][:]
+    nwb_spike_trains = nwb_spikes.units['spike_times'][:]
+    for i in xrange(len(nwb_gids)):
+        gid = nwb_gids[i]
+        pop_name = nwb_cell_types[i]
+        spike_trains[pop_name][gid] = nwb_spike_trains[i]
+    del nwb_spikes, nwb_gids, nwb_cell_types, nwb_spike_trains
     nwb_spikes_file.close()
 
-    for row in nwb_spikes_df.itertuples():
-        gid = row.pop_id
-        pop_name = row.cell_type
-        spike_train = row.spike_times
-        spike_trains[pop_name][gid] = spike_train
-
-    del nwb_spikes_df
-    """
+    if context.verbose > 1:
+        count = sum([len(spike_trains[pop_name]) for pop_name in spike_trains])
+        print 'optimize_baks: pid: %i; loading spikes for %i gids from cell populations: %s took %.1f s' % \
+              (os.getpid(), count, ', '.join(str(pop_name) for pop_name in spike_trains), time.time() - start_time)
 
     imposed_rates = defaultdict(dict)
     start_time = time.time()
@@ -146,10 +140,10 @@ def init_context():
         for gid, attr_dict in cell_attr_gen:
             if gid is not None:
                 imposed_rates[pop_name][gid] = attr_dict['rate']
-                spike_trains[pop_name][gid] = attr_dict['spiketrain'] / 1000.  # convert to s
+                # spike_trains[pop_name][gid] = attr_dict['spiketrain'] / 1000.  # convert to s
                 count += 1
         if context.verbose > 1:
-            print 'optimize_baks: pid: %i; loading %i gids from cell population: %s took %.1f s' % \
+            print 'optimize_baks: pid: %i; loading imposed rates for %i gids from cell population: %s took %.1f s' % \
                   (os.getpid(), count, pop_name, time.time() - start_time)
 
     if context.plot:
@@ -277,15 +271,19 @@ def compute_features_spatial_firing_rates(x, pop_name, gids, export=False, plot=
         imposed_num_fields = len(imposed_field_stats['sizes'])
         inferred_num_fields = len(inferred_field_stats['sizes'])
         num_fields_residuals.append(abs(imposed_num_fields - inferred_num_fields))
-        if imposed_num_fields > 0:
-            mean_imposed_field_width = np.mean(imposed_field_stats['sizes']) * max(context.d)
+
+        if imposed_num_fields == 0 and inferred_num_fields == 0:
+            mean_field_width_residuals.append(np.nan)
         else:
-            mean_imposed_field_width = 0.
-        if inferred_num_fields > 0:
-            mean_inferred_field_width = np.mean(inferred_field_stats['sizes']) * max(context.d)
-        else:
-            mean_inferred_field_width = 0.
-        mean_field_width_residuals.append(abs(mean_imposed_field_width - mean_inferred_field_width))
+            if imposed_num_fields > 0:
+                mean_imposed_field_width = np.mean(imposed_field_stats['sizes']) * max(context.d)
+            else:
+                mean_imposed_field_width = 0.
+            if inferred_num_fields > 0:
+                mean_inferred_field_width = np.mean(inferred_field_stats['sizes']) * max(context.d)
+            else:
+                mean_inferred_field_width = 0.
+            mean_field_width_residuals.append(abs(mean_imposed_field_width - mean_inferred_field_width))
         rate_residuals.append(np.mean(np.abs(np.subtract(imposed_rate, inferred_firing_rates[gid]))))
 
     if context.verbose > 1:
@@ -319,8 +317,8 @@ def filter_features_spatial_firing_rates(primitives, current_features, export=Fa
     features['num_fields_residuals'] = np.mean(num_fields_residuals)
     features['num_fields_error'] = np.mean(np.square(np.divide(num_fields_residuals,
                                                                context.target_range['num_fields'])))
-    features['field_width_residuals'] = np.mean(mean_field_width_residuals)
-    features['field_width_error'] = np.mean(np.square(np.divide(mean_field_width_residuals,
+    features['field_width_residuals'] = np.nanmean(mean_field_width_residuals)
+    features['field_width_error'] = np.nanmean(np.square(np.divide(mean_field_width_residuals,
                                                                context.target_range['field_width'])))
     features['firing_rate_residuals'] = np.mean(np.square(np.divide(rate_residuals,
                                                                     context.target_range['firing_rate'])))
