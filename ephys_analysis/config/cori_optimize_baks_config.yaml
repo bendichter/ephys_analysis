@@ -1,0 +1,45 @@
+bounds:
+  alpha: !!python/tuple
+  - 0.05
+  - 7.
+  beta: !!python/tuple
+  - 0.5
+  - 2.
+feature_names:
+- num_fields_residuals
+- field_width_residuals
+update_context:
+- - optimize_baks
+  - update_baks_params
+get_features_stages:
+- source: optimize_baks
+  get_args_static: get_args_static_distribute_cells
+  compute_features: compute_features_spatial_firing_rates
+  filter_features: filter_features_spatial_firing_rates
+get_objectives:
+  optimize_baks: get_objectives
+kwargs:
+  nwb_spikes_file_path: /global/cscratch1/sd/aaronmil/spike_data/DG_PP_spiketrain_12142018.nwb
+  neuroh5_rates_file_path: /global/cscratch1/sd/aaronmil/spike_data/DG_PP_spiketrain_12142018.h5
+  neuroh5_rates_namespace: 'Vector Stimulus 100'
+  min_field_width: 0.15  # meters
+  field_rate_threshold: 1.  # Hz
+  min_field_amp: 2.  # Hz
+  verbose: 1
+objective_names:
+- num_fields_error
+- field_width_error
+- firing_rate_residuals
+optimization_title: baks
+param_gen: PopulationAnnealing
+param_names:
+- alpha
+- beta
+target_range:
+  num_fields: 0.1
+  field_width: 0.01 # meters
+  firing_rate: 0.1  # Hz
+target_val:
+x0:
+  alpha: 3.
+  beta: 0.8
