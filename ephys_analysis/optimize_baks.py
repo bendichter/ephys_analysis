@@ -88,10 +88,12 @@ def main(cli, config_file_path, output_dir, export, export_file_path, label, ver
         features.update(new_features)
         features, objectives = context.interface.execute(get_objectives, features, context.export)
 
+        sys.stdout.flush()
         print 'features:'
         pprint.pprint({key: val for (key, val) in features.iteritems() if key in context.feature_names})
         print 'objectives'
         pprint.pprint({key: val for (key, val) in objectives.iteritems() if key in context.objective_names})
+        sys.stdout.flush()
 
         context.interface.stop()
 
@@ -134,6 +136,7 @@ def init_context():
     if context.verbose > 1:
         print 'optimize_baks: pid: %i; loading spikes for %i gids from cell populations: %s took %.1f s' % \
               (os.getpid(), count, ', '.join(str(pop_name) for pop_name in spike_trains), time.time() - start_time)
+        sys.stdout.flush()
 
     gid_block_size = int(math.ceil(float(count) / context.num_workers))
 
@@ -151,6 +154,7 @@ def init_context():
         if context.verbose > 1:
             print 'optimize_baks: pid: %i; loading imposed rates for %i gids from cell population: %s took %.1f s' % \
                   (os.getpid(), count, pop_name, time.time() - start_time)
+            sys.stdout.flush()
 
     if context.plot:
         t_bins = np.linspace(0., max(t), 100)
@@ -296,6 +300,7 @@ def compute_features_spatial_firing_rates(x, pop_name, gids, export=False, plot=
         print 'Process: %i: computing spatial_firing_rate features for population: %s cell_ids: %i:%i with x: %s ' \
               'took %.1f s' % (os.getpid(), pop_name, gids[0], gids[-1], ', '.join('%.2f' % i for i in x),
                                time.time()-start_time)
+        sys.stdout.flush()
 
     return dict(num_fields_residuals=num_fields_residuals, mean_field_width_residuals=mean_field_width_residuals,
                 rate_residuals=rate_residuals)
@@ -332,7 +337,7 @@ def filter_features_spatial_firing_rates(primitives, current_features, export=Fa
     if context.disp:
         print 'Process: %i: filtering spatial_firing_rate features for %i cell_ids took %.1f s' % \
               (os.getpid(), len(num_fields_residuals), time.time()-start_time)
-
+        sys.stdout.flush()
     return features
 
 
