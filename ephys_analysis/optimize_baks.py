@@ -7,6 +7,7 @@ from ephys_analysis.utils import find_nearest
 from ephys_analysis.FMA import map_stats2
 from ephys_analysis.vis import plot_1d_place_fields
 from ephys_analysis.baks import baks
+import math
 
 
 context = Context()
@@ -67,25 +68,25 @@ def main(cli, config_file_path, output_dir, export, export_file_path, label, ver
     else:
         from nested.parallel import MPIFuturesInterface
         context.interface = MPIFuturesInterface()
+        context.interface.start(disp=True)
+        context.interface.ensure_controller()
+        config_optimize_interactive(__file__, config_file_path=config_file_path, output_dir=output_dir, export=export,
+                                    export_file_path=export_file_path, label=label, disp=context.disp, verbose=verbose,
+                                    plot=plot, debug=debug, is_controller=True, **kwargs)
         context.interface.apply(config_optimize_interactive, __file__, config_file_path=config_file_path,
                                 output_dir=output_dir, export=export, export_file_path=export_file_path, label=label,
                                 disp=context.disp, verbose=verbose, plot=plot, debug=debug, **kwargs)
-        context.interface.start(disp=True)
-        context.interface.ensure_controller()
-
-        config_optimize_interactive(__file__, config_file_path=config_file_path, output_dir=output_dir, export=export,
-                                    export_file_path=export_file_path, label=label, disp=context.disp, verbose=verbose,
-                                    plot=plot, debug=debug, **kwargs)
 
         features = {}
-        args = get_args_static_distribute_cells()
+        args = context.interface.execute(get_args_static_distribute_cells)
         group_size = len(args[0])
         sequences = [[context.x0_array] * group_size] + args + [[context.export] * group_size] + \
                     [[context.plot] * group_size]
         primitives = context.interface.map(compute_features_spatial_firing_rates, *sequences)
-        new_features = filter_features_spatial_firing_rates(primitives, features, context.export, context.plot)
+        new_features = context.interface.execute(filter_features_spatial_firing_rates, primitives, features,
+                                                 context.export, context.plot)
         features.update(new_features)
-        features, objectives = get_objectives(features, context.export)
+        features, objectives = context.interface.execute(get_objectives, features, context.export)
 
         print 'features:'
         pprint.pprint({key: val for (key, val) in features.iteritems() if key in context.feature_names})
@@ -99,15 +100,10 @@ def config_worker():
     init_context()
 
 
-def config_controller():
-    init_context()
-
-
 def init_context():
     if 'plot' not in context():
         context.plot = False
     pop_names = ['MPP', 'LPP']
-    gid_block_size = 1000
     nwb_spikes_file = NWBHDF5IO(context.nwb_spikes_file_path, 'r')
     nwb_spikes = nwb_spikes_file.read()
 
@@ -134,10 +130,12 @@ def init_context():
     del nwb_spikes, nwb_gids, nwb_cell_types, nwb_spike_trains
     nwb_spikes_file.close()
 
+    count = sum([len(spike_trains[pop_name]) for pop_name in spike_trains])
     if context.verbose > 1:
-        count = sum([len(spike_trains[pop_name]) for pop_name in spike_trains])
         print 'optimize_baks: pid: %i; loading spikes for %i gids from cell populations: %s took %.1f s' % \
               (os.getpid(), count, ', '.join(str(pop_name) for pop_name in spike_trains), time.time() - start_time)
+
+    gid_block_size = int(math.ceil(float(count) / context.num_workers))
 
     imposed_rates = defaultdict(dict)
     start_time = time.time()
