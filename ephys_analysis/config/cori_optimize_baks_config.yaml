@@ -25,6 +25,7 @@ kwargs:
   min_field_width: 0.15  # meters
   field_rate_threshold: 1.  # Hz
   min_field_amp: 2.  # Hz
+  block_size: 10
   verbose: 1
 objective_names:
 - num_fields_error
