@@ -133,6 +133,16 @@ def find_nearest(arr, tt):
 
 
 def smooth(y, box_pts):
+    """Moving average
+
+    Parameters
+    ----------
+    y
+    box_pts
+
+    Returns
+    -------
+
+    """
     box = np.ones(box_pts) / box_pts
-    y_smooth = np.convolve(y, box, mode='same')
-    return y_smooth
+    return np.convolve(y, box, mode='same')
