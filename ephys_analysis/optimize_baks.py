@@ -138,7 +138,9 @@ def init_context():
               (os.getpid(), count, ', '.join(str(pop_name) for pop_name in spike_trains), time.time() - start_time)
         sys.stdout.flush()
 
-    gid_block_size = int(math.ceil(float(count) / context.num_workers))
+    if 'block_size' not in context():
+        context.block_size = context.num_workers
+    gid_block_size = int(math.ceil(float(count) / context.block_size))
 
     imposed_rates = defaultdict(dict)
     start_time = time.time()
