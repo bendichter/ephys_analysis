@@ -30,19 +30,21 @@ def linearize_trial(norm_trial_pos, diameter):
     return full_run
 
 
-def linearize_session(pos, pos_tt, diameter=0.65, running_speed=.03, trials=None):
+def linearize_session(pos, pos_tt, diameter=0.65, running_speed=.03, speed_smoother=40, trials=None):
     """Compute linearized position across trials. Only include points during the trials
      of interest and while animal is running
 
     Parameters
     ----------
     pos: np.ndarray
-        normalized x,y position for theta (aka eight) maze
+        normalized x, y position for theta (aka eight) maze
     pos_tt: np.ndarray
     diameter: float (optional)
         in meters. Default = 65 cm
     running_speed: float (optional)
         in m/s. Default = 3 cm/s
+    speed_smoother: int
+        number of time points to smooth speed over
     trials: np.ndarray (optional)
         [[start1, end1], [start2, end2], ...]
 
@@ -56,13 +58,11 @@ def linearize_session(pos, pos_tt, diameter=0.65, running_speed=.03, trials=None
     if trials is None:
         trials = [[np.min(pos_tt), np.max(pos_tt)]]
 
-    running = np.zeros(len(pos), dtype='bool')
     lin_pos = np.zeros(len(pos)) * np.nan
 
     for i, trial in trials.iterrows():
         trial_inds = isin_single_interval(pos_tt, [trial['start_time'], trial['stop_time']],
-                                          inclusive_left=True,
-                                          inclusive_right=False)
+                                          inclusive_left=True, inclusive_right=False)
         trial_pos = pos[trial_inds, :]
         linearized_pos = linearize_trial(trial_pos, diameter)
         if trial['condition'] == 'run_right':
@@ -70,17 +70,15 @@ def linearize_session(pos, pos_tt, diameter=0.65, running_speed=.03, trials=None
         lin_pos[trial_inds] = linearized_pos
 
         speed = np.diff(linearized_pos) / np.diff(pos_tt[trial_inds])
-        speed = np.hstack((0, np.abs(smooth(speed, 40))))
+        speed = np.hstack((0, np.abs(smooth(speed, speed_smoother))))
 
         if running_speed:
-            running[trial_inds] = speed > running_speed
-    if running_speed:
-        lin_pos[~running] = np.nan
+            lin_pos[trial_inds][speed < running_speed] = np.nan
 
     return lin_pos
 
 
-def compute_running(pos, pos_tt, speed_thresh):
+def compute_speed(pos, pos_tt, smooth_param=40):
     """Compute boolean of whether the speed of the animal was above a threshold
     for each time point
 
@@ -90,8 +88,6 @@ def compute_running(pos, pos_tt, speed_thresh):
         in meters
     pos_tt: np.ndarray(dtype=float)
         in seconds
-    speed_thresh: float, optional
-        in meters. Default = 3.0 cm/s
 
     Returns
     -------
@@ -99,10 +95,10 @@ def compute_running(pos, pos_tt, speed_thresh):
 
     """
     speed = np.hstack((0, np.sqrt(np.sum(np.diff(pos.T) ** 2, axis=0)) / np.diff(pos_tt)))
-    return speed > speed_thresh
+    return smooth(speed, smooth_param)
 
 
-def compute_2d_occupancy(pos, pos_tt, edges, speed_thresh=0.03, running=None):
+def compute_2d_occupancy(pos, pos_tt, edges, speed_thresh=0.03):
     """Computes occupancy per bin in seconds
 
     Parameters
@@ -115,7 +111,6 @@ def compute_2d_occupancy(pos, pos_tt, edges, speed_thresh=0.03, running=None):
         edges of histogram in meters
     speed_thresh: float, optional
         in meters. Default = 3.0 cm/s
-    running: np.ndarray(dtype=bool), optional
 
     Returns
     -------
@@ -126,21 +121,16 @@ def compute_2d_occupancy(pos, pos_tt, edges, speed_thresh=0.03, running=None):
     """
 
     sampling_period = (np.max(pos_tt) - np.min(pos_tt)) / len(pos_tt)
-
-    if running is None:
-        running = compute_running(pos, pos_tt, speed_thresh)
-
-    run_pos = pos[running, :]
-
+    is_running = compute_speed(pos, pos_tt) > speed_thresh
+    run_pos = pos[is_running, :]
     occupancy = np.histogram2d(run_pos[:, 0],
                                run_pos[:, 1],
                                [edges, edges])[0] * sampling_period  # in seconds
 
-    return occupancy, running
+    return occupancy, is_running
 
 
-def compute_2d_n_spikes(pos, pos_tt, spikes, edges, speed_thresh=0.03,
-                        running=None):
+def compute_2d_n_spikes(pos, pos_tt, spikes, edges, speed_thresh=0.03):
     """Returns speed-gated occupancy and speed-gated and Gaussian-filtered
     firing rate
 
@@ -156,18 +146,15 @@ def compute_2d_n_spikes(pos, pos_tt, spikes, edges, speed_thresh=0.03,
         edges of histogram in meters
     speed_thresh: float
         in meters. Default = 3.0 cm/s
-    running: np.ndarray(dtype=bool), optional
-
 
     Returns
     -------
     """
 
-    if running is None:
-        running = compute_running(pos, pos_tt, speed_thresh)
+    is_running = compute_speed(pos, pos_tt) > speed_thresh
 
     spike_pos_inds = find_nearest(spikes, pos_tt)
-    spike_pos_inds = spike_pos_inds[running[spike_pos_inds]]
+    spike_pos_inds = spike_pos_inds[is_running[spike_pos_inds]]
     pos_on_spikes = pos[spike_pos_inds, :]
 
     n_spikes = np.histogram2d(pos_on_spikes[:, 0],
