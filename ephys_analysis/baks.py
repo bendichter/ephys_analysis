@@ -2,7 +2,7 @@ from scipy.special import gamma
 import numpy as np
 
 
-def baks(spike_times, time, a=4, b=None):
+def baks(spike_times, time, a=4, b=0.8):
     """Bayesian Adaptive Kernel Smoother (BAKS)
     adapted from https://github.com/nurahmadi/BAKS
 
@@ -28,8 +28,7 @@ def baks(spike_times, time, a=4, b=None):
 
     n = len(spike_times)
 
-    if b is None:
-        b = n**(4/5)
+    b = n**(b)
 
     sumnum = 0
     sumdenom = 0
