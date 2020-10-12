@@ -5,15 +5,15 @@ from scipy.ndimage.filters import gaussian_filter, maximum_filter
 from ephys_analysis.utils import isin_single_interval, smooth, find_nearest
 
 
-def linearize_trial(norm_trial_pos, diameter):
+def linearize_trial(norm_trial_pos, diameter=0.65):
     """Linearize a single trial position series from a theta maze
 
     Parameters
     ----------
     norm_trial_pos: np.ndarray
-        Entire maze bounded by (0, 1, 0, 1)
-    diameter: float
-        Diameter of the maze in meters
+        Entire maze bounded by (-1, 1, -1, 1)
+    diameter: float, optional
+        Diameter of the maze in meters. Default: 65 cm, the length used by Senzai Buzsaki 2017
 
     Returns
     -------
@@ -45,8 +45,7 @@ def linearize_session(pos, pos_tt, diameter=0.65, running_speed=.03, speed_smoot
         in m/s. Default = 3 cm/s
     speed_smoother: int
         number of time points to smooth speed over
-    trials: np.ndarray (optional)
-        [[start1, end1], [start2, end2], ...]
+    trials: pd.DataFrame
 
     Returns
     -------
@@ -67,13 +66,14 @@ def linearize_session(pos, pos_tt, diameter=0.65, running_speed=.03, speed_smoot
         linearized_pos = linearize_trial(trial_pos, diameter)
         if trial['condition'] == 'run_right':
             linearized_pos += 1 + 2 / np.pi
-        lin_pos[trial_inds] = linearized_pos
-
-        speed = np.diff(linearized_pos) / np.diff(pos_tt[trial_inds])
-        speed = np.hstack((0, np.abs(smooth(speed, speed_smoother))))
 
         if running_speed:
-            lin_pos[trial_inds][speed < running_speed] = np.nan
+            speed = np.diff(linearized_pos) / np.diff(pos_tt[trial_inds])
+            speed = np.hstack((0, np.abs(smooth(speed, speed_smoother))))
+
+            linearized_pos[speed < running_speed] = np.nan
+
+        lin_pos[trial_inds] = linearized_pos
 
     return lin_pos
 
@@ -88,6 +88,7 @@ def compute_speed(pos, pos_tt, smooth_param=40):
         in meters
     pos_tt: np.ndarray(dtype=float)
         in seconds
+    smooth_param: float, optional
 
     Returns
     -------
@@ -98,7 +99,7 @@ def compute_speed(pos, pos_tt, smooth_param=40):
     return smooth(speed, smooth_param)
 
 
-def compute_2d_occupancy(pos, pos_tt, edges, speed_thresh=0.03):
+def compute_2d_occupancy(pos, pos_tt, edges_x, edges_y, speed_thresh=0.03):
     """Computes occupancy per bin in seconds
 
     Parameters
@@ -107,7 +108,9 @@ def compute_2d_occupancy(pos, pos_tt, edges, speed_thresh=0.03):
         in meters
     pos_tt: np.ndarray(dtype=float)
         in seconds
-    edges: np.ndarray(dtype=float)
+    edges_x: array-like
+        edges of histogram in meters
+    edges_y: array-like
         edges of histogram in meters
     speed_thresh: float, optional
         in meters. Default = 3.0 cm/s
@@ -125,24 +128,25 @@ def compute_2d_occupancy(pos, pos_tt, edges, speed_thresh=0.03):
     run_pos = pos[is_running, :]
     occupancy = np.histogram2d(run_pos[:, 0],
                                run_pos[:, 1],
-                               [edges, edges])[0] * sampling_period  # in seconds
+                               [edges_x, edges_y])[0] * sampling_period  # in seconds
 
     return occupancy, is_running
 
 
-def compute_2d_n_spikes(pos, pos_tt, spikes, edges, speed_thresh=0.03):
-    """Returns speed-gated occupancy and speed-gated and Gaussian-filtered
-    firing rate
+def compute_2d_n_spikes(pos, pos_tt, spikes, edges_x, edges_y, speed_thresh=0.03):
+    """Returns speed-gated position during spikes
 
     Parameters
     ----------
     pos: np.ndarray(dtype=float)
-        in meters
+        (time x 2) in meters
     pos_tt: np.ndarray(dtype=float)
-        in seconds
+        (time,) in seconds
     spikes: np.ndarray(dtype=float)
         in seconds
-    edges: np.ndarray(dtype=float)
+    edges_x: np.ndarray(dtype=float)
+        edges of histogram in meters
+    edges_y: np.ndarray(dtype=float)
         edges of histogram in meters
     speed_thresh: float
         in meters. Default = 3.0 cm/s
@@ -159,33 +163,38 @@ def compute_2d_n_spikes(pos, pos_tt, spikes, edges, speed_thresh=0.03):
 
     n_spikes = np.histogram2d(pos_on_spikes[:, 0],
                               pos_on_spikes[:, 1],
-                              [edges, edges])[0]
+                              [edges_x, edges_y])[0]
 
     return n_spikes
 
 
-def compute_2d_firing_rate(pos, pos_tt, spikes, pixel_width=0.0092,
-                           speed_thresh=0.03, field_len=0.46,
-                           gaussian_sd=0.0184):
+def compute_2d_firing_rate(pos, pos_tt, spikes,
+                           pixel_width,
+                           speed_thresh=0.03,
+                           gaussian_sd=0.0184,
+                           x_start=None, x_stop=None,
+                           y_start=None, y_stop=None):
     """Returns speed-gated occupancy and speed-gated and
     Gaussian-filtered firing rate
 
     Parameters
     ----------
     pos: np.ndarray(dtype=float)
-        in meters
+        (time x 2), in meters
     pos_tt: np.ndarray(dtype=float)
-        in seconds
+        (time,) in seconds
     spikes: np.ndarray(dtype=float)
         in seconds
     pixel_width: float
-        in meters. Default = 0.92 cm
-    speed_thresh: float
+    speed_thresh: float, optional
         in meters. Default = 3.0 cm/s
-    field_len: float
-        in meters. Default = 46 cm
-    gaussian_sd: float
+    gaussian_sd: float, optional
         in meters. Default = 1.84 cm
+    x_start: float, optional
+    x_stop: float, optional
+    y_start: float, optional
+    y_stop: float, optional
+
 
     Returns
     -------
@@ -196,19 +205,29 @@ def compute_2d_firing_rate(pos, pos_tt, spikes, pixel_width=0.0092,
         in Hz
 
     """
+    # pixel_width=0.0092,
+    # field_len = 0.46
+    # edges = np.arange(0, field_len + pixel_width, pixel_width)
 
-    edges = np.arange(0, field_len + pixel_width, pixel_width)
+    x_start = np.min(pos[:, 0]) if x_start is None else x_start
+    x_stop = np.max(pos[:, 0]) if x_stop is None else x_stop
 
-    occupancy, running = compute_2d_occupancy(pos, pos_tt, edges)
+    y_start = np.min(pos[:, 1]) if y_start is None else y_start
+    y_stop = np.max(pos[:, 1]) if y_stop is None else y_stop
 
-    n_spikes = compute_2d_n_spikes(pos, pos_tt, spikes, edges, speed_thresh)
+    edges_x = np.arange(x_start, x_stop, pixel_width)
+    edges_y = np.arange(y_start, y_stop, pixel_width)
+
+    occupancy, running = compute_2d_occupancy(pos, pos_tt, edges_x, edges_y, speed_thresh)
+
+    n_spikes = compute_2d_n_spikes(pos, pos_tt, spikes, edges_x, edges_y, speed_thresh)
 
     firing_rate = n_spikes / occupancy  # in Hz
     firing_rate[np.isnan(firing_rate)] = 0
 
     filtered_firing_rate = gaussian_filter(firing_rate, gaussian_sd / pixel_width)
 
-    return occupancy, filtered_firing_rate, edges
+    return occupancy, filtered_firing_rate, [edges_x, edges_y]
 
 
 def compute_2d_place_fields(firing_rate, min_firing_rate=1, thresh=0.2,

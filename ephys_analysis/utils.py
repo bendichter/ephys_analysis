@@ -127,6 +127,17 @@ def listdict2dictlist(li):
 
 
 def find_nearest(arr, tt):
+    """Used for picking out elements of a TimeSeries based on spike times
+
+    Parameters
+    ----------
+    arr
+    tt
+
+    Returns
+    -------
+
+    """
     arr = arr[arr > tt[0]]
     arr = arr[arr < tt[-1]]
     return np.searchsorted(tt, arr)
